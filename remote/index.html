@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>TV Launcher Remote</title>
+<style>
+:root{--accent:#0a84ff;--ar:10,132,255}
+:root[data-theme=dark]{color-scheme:dark;--bg:#000;--fg:#f5f5f7;--mut:rgba(245,245,247,.55);--g:rgba(255,255,255,.1);--g2:rgba(255,255,255,.2);--nav:rgba(22,22,28,.72);--line:rgba(255,255,255,.1);--glow:#232a44}
+:root[data-theme=light]{color-scheme:light;--bg:#f2f3f8;--fg:#14161c;--mut:rgba(20,22,28,.55);--g:rgba(20,22,28,.07);--g2:rgba(20,22,28,.15);--nav:rgba(255,255,255,.72);--line:rgba(0,0,0,.08);--glow:#d9def5}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+html,body{height:100%;background:var(--bg);color:var(--fg);font:16px/1.3 -apple-system,"SF Pro Text","Segoe UI",Roboto,"Noto Sans",sans-serif;overscroll-behavior:none}
+body{background:radial-gradient(120% 55% at 50% -10%,var(--glow),var(--bg) 62%) var(--bg)}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;border:0;background:var(--g);border-radius:20px;padding:15px 18px;transition:transform .12s,background .12s}
+button:active{transform:scale(.94);background:var(--g2)}
+#app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+header{display:flex;align-items:center;gap:10px;padding:14px 16px 8px}
+header .t{flex:1;min-width:0}
+#st{font-weight:600;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sub{font-size:13px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.danger{background:#ff453a;color:#fff;font-weight:600}
+.home{background:var(--accent);color:#fff;font-weight:600}
+main{flex:1;min-height:0;position:relative}
+.tab{position:absolute;inset:0;padding:10px 16px;display:none;flex-direction:column;gap:14px;overflow:auto}
+.tab.on{display:flex}
+nav{display:flex;gap:2px;padding:8px 6px calc(8px + env(safe-area-inset-bottom));background:var(--nav);backdrop-filter:blur(30px) saturate(1.8);-webkit-backdrop-filter:blur(30px) saturate(1.8);border-top:1px solid var(--line)}
+nav button{flex:1;min-width:0;background:none;padding:11px 1px;font-size:12px;color:var(--mut);border-radius:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav button.on{color:var(--fg);background:var(--g)}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.row.two{grid-template-columns:repeat(2,1fr)}
+.big{padding:20px 8px;font-size:16px}
+.dpad{width:min(78vw,320px);aspect-ratio:1;margin:6px auto;border-radius:50%;background:var(--g);display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);padding:6px;box-shadow:inset 0 1px 1px var(--g2)}
+.dpad button{background:none;border-radius:50%;display:grid;place-items:center;padding:0}
+.dpad button:active{background:var(--g2)}
+.dpad .ok{background:var(--accent);color:#fff;font-weight:600;font-size:20px;grid-area:2/2}
+.dpad svg{width:34px;height:34px;stroke:var(--fg);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.u{grid-area:1/2}.l{grid-area:2/1}.r{grid-area:2/3}.d{grid-area:3/2}
+.r svg{transform:rotate(90deg)}.d svg{transform:rotate(180deg)}.l svg{transform:rotate(270deg)}
+.tip{font-size:13px;color:var(--mut);text-align:center;line-height:1.4}
+.pad{flex:1;min-height:220px;border-radius:28px;background:var(--g);display:grid;place-items:center;color:var(--mut);font-size:14px;text-align:center;padding:0 24px;touch-action:none}
+input{width:100%;padding:16px;border-radius:18px;border:2px solid transparent;background:var(--g);color:var(--fg);font-size:18px;-webkit-user-select:text;user-select:text;outline:none}
+input:focus{border-color:var(--accent)}
+.media svg{width:26px;height:26px;fill:currentColor}
+.apps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.app{aspect-ratio:1;padding:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:13px;border-radius:22px;overflow:hidden}
+.app img{width:46%;aspect-ratio:1;object-fit:contain;border-radius:10px}
+.app span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--mut);text-align:center;margin-top:40px}
+h3{font-size:13px;font-weight:500;color:var(--mut);margin:4px 2px -4px}
+#auth{position:fixed;inset:0;z-index:9;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px}
+#auth h1{font-size:24px;font-weight:600}
+#auth p{color:var(--mut);font-size:15px;text-align:center;max-width:280px}
+#dots{display:flex;gap:16px}
+#dots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--mut)}
+#dots i.f{background:var(--accent);border-color:var(--accent)}
+#err{color:#ff6961;min-height:20px;font-size:14px}
+.keys{display:grid;grid-template-columns:repeat(3,76px);gap:14px}
+.keys button{height:76px;border-radius:50%;font-size:28px;font-weight:300;padding:0}
+.keys .z{grid-column:2}
+.off{position:fixed;top:env(safe-area-inset-top);left:0;right:0;background:#ff9f0a;color:#000;text-align:center;font-size:13px;padding:4px;z-index:8}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><symbol id="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol></svg>
+<div id="off" class="off" data-i="rOff" hidden></div>
+<div id="auth" hidden>
+  <h1 data-i="rPairT"></h1>
+  <p data-i="rPairH"></p>
+  <div id="dots"><i></i><i></i><i></i><i></i></div>
+  <div id="err"></div>
+  <div class="keys" id="keys"></div>
+</div>
+<div id="app">
+  <header>
+    <div class="t"><div id="st">TV Launcher</div><div id="sub"></div></div>
+    <button id="closeBtn" class="danger" data-a="close" data-i="rClose" hidden></button>
+    <button class="home" data-a="home" data-i="rHome"></button>
+  </header>
+  <main>
+    <section class="tab on" id="t-nav">
+      <div class="dpad">
+        <button class="u" data-k="Up" data-rep><svg><use href="#chev"/></svg></button>
+        <button class="l" data-k="Left" data-rep><svg><use href="#chev"/></svg></button>
+        <button class="ok" data-k="Enter">OK</button>
+        <button class="r" data-k="Right" data-rep><svg><use href="#chev"/></svg></button>
+        <button class="d" data-k="Down" data-rep><svg><use href="#chev"/></svg></button>
+      </div>
+      <div class="row">
+        <button class="big" data-a="back" data-i="back"></button>
+        <button class="big" data-k="Apps" data-i="options"></button>
+        <button class="big" data-k="Esc">Esc</button>
+      </div>
+      <div class="tip" id="tip" data-i="tip" hidden></div>
+    </section>
+    <section class="tab" id="t-mouse">
+      <div class="pad" id="pad" data-i="padHint"></div>
+      <div class="row two"><button class="big" data-c="l" data-i="left"></button><button class="big" data-c="r" data-i="right"></button></div>
+    </section>
+    <section class="tab" id="t-kb">
+      <input id="kb" type="text" data-ph="kbPh" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="row">
+        <button class="big" data-a="enter" data-i="enter"></button>
+        <button class="big" data-k="Backspace" data-rep>⌫</button>
+        <button class="big" data-a="clear" data-i="clear"></button>
+      </div>
+      <div class="row">
+        <button data-k="Tab">Tab</button>
+        <button data-k="Space" data-i="space"></button>
+        <button data-k="Esc">Esc</button>
+        <button data-combo="alttab">Alt + Tab</button>
+        <button data-k="Win">Win / ⌘</button>
+        <button data-k="Delete">Del</button>
+      </div>
+    </section>
+    <section class="tab" id="t-media">
+      <div class="row media">
+        <button class="big" data-k="Prev"><svg viewBox="0 0 24 24"><path d="M18 6l-9 6 9 6zM5 6h2v12H5z"/></svg></button>
+        <button class="big" data-k="PlayPause">▶ / ❚❚</button>
+        <button class="big" data-k="Next"><svg viewBox="0 0 24 24"><path d="M6 6l9 6-9 6zM17 6h2v12h-2z"/></svg></button>
+      </div>
+      <div class="row">
+        <button class="big" data-k="VolDown" data-rep data-i="vDown"></button>
+        <button class="big" data-k="Mute" data-i="mute"></button>
+        <button class="big" data-k="VolUp" data-rep data-i="vUp"></button>
+      </div>
+      <div class="row">
+        <button class="big" data-k="Left" data-rep data-i="rew"></button>
+        <button class="big" data-k="Space" data-i="pause"></button>
+        <button class="big" data-k="Right" data-rep data-i="ffw"></button>
+      </div>
+      <div class="row two"><button class="big" data-k="F" data-i="full"></button><button class="big" data-k="F11">F11</button></div>
+    </section>
+    <section class="tab" id="t-apps">
+      <div class="apps" id="apps"></div>
+      <div class="empty" id="noApps" data-i="noApps" hidden></div>
+    </section>
+    <section class="tab" id="t-more">
+      <h3 data-i="power"></h3>
+      <div class="row">
+        <button class="big" data-pw="sleep" data-i="sleep"></button>
+        <button class="big" data-pw="restart" data-i="restart"></button>
+        <button class="big danger" data-pw="shutdown" data-i="shutdown"></button>
+      </div>
+    </section>
+  </main>
+  <nav id="nav">
+    <button data-tab="t-nav" class="on" data-i="tCtrl"></button>
+    <button data-tab="t-mouse" data-i="tMouse"></button>
+    <button data-tab="t-kb" data-i="tKeys"></button>
+    <button data-tab="t-media" data-i="tMedia"></button>
+    <button data-tab="t-apps" data-i="tApps"></button>
+    <button data-tab="t-more" data-i="tMore"></button>
+  </nav>
+</div>
+<script src="/i18n.js"></script>
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+let ws, token = null, sentToken = false, pin = '', lang = I18N.pick(navigator.language), state = { apps: [], mode: 'launcher' };
+try { token = localStorage.getItem('tvr'); } catch (e) {}
+const T = k => I18N.t(lang, k);
+const buzz = () => navigator.vibrate && navigator.vibrate(8);
+const send = o => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
+const mq = matchMedia('(prefers-color-scheme: dark)');
+
+/* Sprache, Design, Akzentfarbe */
+function applyLang() {
+  document.documentElement.lang = lang; document.documentElement.dir = I18N.dir(lang);
+  $$('[data-i]').forEach(e => { e.textContent = T(e.dataset.i); });
+  $$('[data-ph]').forEach(e => { e.placeholder = T(e.dataset.ph); });
+  renderState();
+}
+function applyTheme() {
+  const t = state.theme || 'system', dark = t === 'system' ? mq.matches : t === 'dark', r = document.documentElement;
+  r.dataset.theme = dark ? 'dark' : 'light';
+  const a = state.accent || '#0a84ff'; r.style.setProperty('--accent', a);
+  document.querySelector('meta[name=theme-color]').content = dark ? '#000000' : '#f2f3f8';
+}
+mq.addEventListener('change', applyTheme);
+
+/* Verbindung + Kopplung */
+function connect() {
+  ws = new WebSocket(`ws://${location.host}`);
+  ws.onopen = () => { $('#off').hidden = true; if (token) { sentToken = true; send({ t: 'auth', token }); } else showAuth(''); };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.t === 'auth') {
+      if (m.ok) { token = m.token; try { localStorage.setItem('tvr', token); } catch (x) {} $('#auth').hidden = true; }
+      else { const was = sentToken; sentToken = false; token = null; try { localStorage.removeItem('tvr'); } catch (x) {} showAuth(was ? '' : m.locked ? `${T('rLock')} ${m.locked} s` : T('rWrong')); }
+    } else if (m.t === 'state') { state = m; if (m.lang && m.lang !== lang) lang = m.lang; applyTheme(); applyLang(); }
+  };
+  ws.onclose = () => { $('#off').hidden = false; setTimeout(connect, 1500); };
+}
+function showAuth(msg) { pin = ''; dots(); $('#err').textContent = msg; $('#auth').hidden = false; }
+function dots() { $$('#dots i').forEach((d, i) => d.classList.toggle('f', i < pin.length)); }
+for (const k of ['1','2','3','4','5','6','7','8','9','','0','⌫']) {
+  const b = document.createElement('button');
+  if (k === '') b.style.visibility = 'hidden';
+  b.textContent = k; if (k === '0') b.className = 'z';
+  b.onclick = () => {
+    buzz(); if (k === '⌫') pin = pin.slice(0, -1); else if (pin.length < 4) pin += k; dots();
+    if (pin.length === 4) { send({ t: 'auth', pin }); setTimeout(() => { pin = ''; dots(); }, 300); }
+  };
+  $('#keys').append(b);
+}
+
+/* Status + Apps */
+function renderState() {
+  const run = state.mode !== 'launcher';
+  $('#st').textContent = run ? state.name : (state.device || I18N.name);
+  $('#sub').textContent = run ? T(state.mode === 'web' ? 'rWeb' : 'rProg') : T('rReady');
+  $('#closeBtn').hidden = !run; $('#tip').hidden = !run;
+  const box = $('#apps'); box.innerHTML = '';
+  $('#noApps').hidden = state.apps.length > 0;
+  for (const a of state.apps) {
+    const b = document.createElement('button'); b.className = 'app';
+    b.innerHTML = (a.icon ? `<img src="${a.icon}" alt="">` : '') + '<span></span>'; b.querySelector('span').textContent = a.name;
+    b.onclick = () => { buzz(); send({ t: 'launch', id: a.id }); setTab('t-nav'); };
+    box.append(b);
+  }
+}
+function setTab(id) { $$('.tab').forEach(t => t.classList.toggle('on', t.id === id)); $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === id)); }
+$$('#nav button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+
+/* Tasten (mit Wiederholen beim Halten) */
+function press(btn, fn, repeat) {
+  let t, i; const stop = () => { clearTimeout(t); clearInterval(i); };
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); buzz(); fn(); if (repeat) t = setTimeout(() => { i = setInterval(fn, 90); }, 380); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, stop));
+}
+$$('[data-k]').forEach(b => press(b, () => send({ t: 'key', k: b.dataset.k }), 'rep' in b.dataset));
+$$('[data-combo]').forEach(b => b.onclick = () => { buzz(); send({ t: 'combo', k: b.dataset.combo }); });
+$$('[data-c]').forEach(b => b.onclick = () => { buzz(); send({ t: 'click', b: b.dataset.c }); });
+$$('[data-pw]').forEach(b => { let armed = 0, label = ''; b.onclick = () => {
+  buzz(); if (!armed) { armed = 1; label = b.textContent; b.textContent = T('confirm'); setTimeout(() => { armed = 0; b.textContent = label; }, 3000); }
+  else { armed = 0; b.textContent = label; send({ t: 'power', k: b.dataset.pw }); } }; });
+$$('[data-a]').forEach(b => b.onclick = () => {
+  buzz(); const a = b.dataset.a;
+  if (a === 'home' || a === 'close') send({ t: a });
+  else if (a === 'back') send({ t: 'back' });
+  else if (a === 'enter') { send({ t: 'key', k: 'Enter' }); kb.value = ''; prev = ''; }
+  else if (a === 'clear') { kb.value = ''; prev = ''; kb.focus(); }
+});
+
+/* Tastatur: live mitschreiben */
+const kb = $('#kb'); let prev = '';
+kb.addEventListener('input', () => {
+  const v = kb.value; let i = 0;
+  while (i < prev.length && i < v.length && prev[i] === v[i]) i++;
+  for (let k = 0; k < prev.length - i; k++) send({ t: 'key', k: 'Backspace' });
+  if (v.slice(i)) send({ t: 'text', v: v.slice(i) });
+  prev = v;
+});
+
+/* Touchpad */
+const pad = $('#pad'); let last = null, moved = false, t0 = 0, fingers = 0, ax = 0, ay = 0, raf = 0;
+const pos = ts => { let x = 0, y = 0; for (const t of ts) { x += t.clientX; y += t.clientY; } return { x: x / ts.length, y: y / ts.length }; };
+function flush() { raf = 0; const dx = Math.round(ax), dy = Math.round(ay); if (dx || dy) { send({ t: 'move', dx, dy }); ax -= dx; ay -= dy; } }
+pad.addEventListener('touchstart', e => { e.preventDefault(); fingers = Math.max(fingers, e.touches.length); last = pos(e.touches); if (e.touches.length === 1) { moved = false; t0 = Date.now(); fingers = 1; } }, { passive: false });
+pad.addEventListener('touchmove', e => {
+  e.preventDefault(); const p = pos(e.touches), dx = p.x - last.x, dy = p.y - last.y; last = p;
+  if (Math.abs(dx) + Math.abs(dy) > 1) moved = true;
+  if (e.touches.length >= 2) send({ t: 'scroll', d: Math.round(dy * 5) });
+  else { const k = 1.4 + Math.min(Math.hypot(dx, dy) / 10, 2.2); ax += dx * k; ay += dy * k; if (!raf) raf = requestAnimationFrame(flush); }
+}, { passive: false });
+pad.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length === 0) { if (!moved && Date.now() - t0 < 300) { buzz(); send({ t: 'click', b: fingers >= 2 ? 'r' : 'l' }); } fingers = 0; }
+}, { passive: false });
+
+applyTheme(); applyLang(); connect();
+</script>
+</body>
+</html>

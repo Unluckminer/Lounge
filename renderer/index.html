@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TV Launcher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="bg"><div class="wl" id="wall"></div><div class="wl" id="wall2"></div><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i><i class="shade"></i></div>
+<main>
+  <section id="zone"></section>
+  <button id="gear" class="glass round" data-f aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+  <section id="stage">
+    <div id="empty" hidden><h1 data-i="emptyT"></h1><p data-i="emptyS"></p></div>
+    <div id="row"></div>
+  </section>
+  <div id="dev" class="glass"><i></i><span></span></div>
+  <button id="pill" class="glass" data-f hidden data-i="pair"></button>
+  <div id="editbar" class="glass" hidden>
+    <span id="editHint"></span>
+    <button class="btn" data-f id="eAdd"></button>
+    <button class="btn" data-f id="eReset"></button>
+    <button class="btn primary" data-f id="eDone"></button>
+  </div>
+</main>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

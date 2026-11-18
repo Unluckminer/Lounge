@@ -1,0 +1,80 @@
+{
+  "name": "tv-launcher",
+  "productName": "TV Launcher",
+  "version": "1.2.0",
+  "description": "Apple-TV-Style Launcher mit Smartphone-Fernbedienung",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable --x64 --publish never",
+    "dist:win": "electron-builder --win portable --x64 --publish never",
+    "dist:mac": "electron-builder --mac dmg --universal --publish never",
+    "dist:linux": "electron-builder --linux AppImage --x64 --publish never"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "local.tvlauncher",
+    "productName": "TV Launcher",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "remote/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "artifactName": "Lounge-Windows.${ext}",
+      "extraResources": [
+        {
+          "from": "scripts",
+          "to": "scripts"
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.entertainment",
+      "identity": null,
+      "artifactName": "Lounge-macOS.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "AudioVideo",
+      "artifactName": "Lounge-Linux.${ext}"
+    },
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    }
+  }
+}

@@ -1,0 +1,50 @@
+name: Lounge bauen
+
+# Startet von Hand (Actions > "Lounge bauen" > Run workflow) oder automatisch bei einem Tag wie v1.2.0.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+            file: dist/Lounge-Windows.exe
+          - os: macos-latest
+            script: dist:mac
+            file: dist/Lounge-macOS.dmg
+          - os: ubuntu-latest
+            script: dist:linux
+            file: dist/Lounge-Linux.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.script }}
+          path: ${{ matrix.file }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
