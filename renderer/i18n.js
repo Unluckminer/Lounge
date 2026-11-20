@@ -21,10 +21,27 @@ ar: 'تصبح على خير|صباح الخير|مرحباً|مساء الخير
 /* Neue Texte: nur Englisch und Deutsch, andere Sprachen fallen auf Englisch zurück */
 const X = { en: 'Slideshow|Built-in images|Add own images…|Remove own images|Text size|Layout|Edit layout|Add widget|Reset layout|Clock|Weather|Calendar|Note|World clock|Write a note…|City for the clock|Drag widgets to move them, pull the corner to resize. Keyboard: arrows move, Shift + arrows resize, Delete removes.|Drag to move · pull the corner to resize', de: 'Diashow|Mitgelieferte Bilder|Eigene Bilder hinzufügen…|Eigene Bilder entfernen|Schriftgröße|Layout|Layout bearbeiten|Widget hinzufügen|Layout zurücksetzen|Uhr|Wetter|Kalender|Notiz|Weltzeituhr|Notiz schreiben…|Stadt für die Uhr|Widgets ziehen zum Verschieben, an der Ecke ziehen zum Skalieren. Tastatur: Pfeile verschieben, Umschalt + Pfeile skalieren, Entf entfernt.|Ziehen zum Verschieben · Ecke zum Skalieren' };
 for (const l in X) L[l] += '|' + X[l];
+
+/* Neue Texte (Version 1.3): nur Englisch und Deutsch, andere Sprachen fallen auf Englisch zurück */
+const Y = {
+en: { wheel: 'Menu', quick: 'Quick start', quickAdd: 'Add to quick start', quickHint: 'Small icons at the very top. They open as a normal program in a normal window, without fullscreen and without Lounge taking over.', ctrlL: 'Ctrl + L menu', slideSec: 'Time per image',
+  wForecast: 'Forecast', wTodo: 'To-do', wTimer: 'Timer', wSystem: 'System', wCountdown: 'Countdown', todoPh: 'New task…', timer: 'Timer', stopwatch: 'Stopwatch', go: 'Start', reset: 'Reset', timerDone: 'Time is up', cpu: 'CPU', ram: 'Memory', battery: 'Battery', uptime: 'Uptime',
+  today: 'Today', tomorrow: 'Tomorrow', yesterday: 'Yesterday', daysLeft: 'days to go', daysAgo: 'days ago', cdSet: 'Tap to set a date', cdDate: 'Date', feels: 'Feels like', humid: 'Humidity', wind: 'Wind',
+  pickProg: 'Choose program', looking: 'Looking for programs…', ddRunning: 'Open now', ddNone: 'No open programs found', ddSuggest: 'Suggestions', ddMore: 'Shuffle', ddFile: 'Browse files…', dest: 'Add as', destTile: 'Tile (fullscreen)', destQuick: 'Quick start (normal window)', closeRun: 'Close running app',
+  mHome: 'Back to Lounge', mTasks: 'Switch task', mFullOn: 'Fullscreen', mFullOff: 'Exit fullscreen', mFullDone: 'Fullscreen off', mSplit: 'Split screen', mUnsplit: 'End split screen', mSplitPick: 'Show next to…', mClose: 'Close app', mQuit: 'Quit Lounge', mSure: 'Really?', mNone: 'Nothing here', mHint: '← → select  ·  Enter  ·  Esc closes',
+  hEsc: 'Esc twice closes', hMenu: 'Ctrl + L opens the menu', qBack: 'Lounge is in the taskbar – click its icon to return', rPaired: 'Phone connected', rMenu: 'Menu' },
+de: { wheel: 'Menü', quick: 'Schnellstart', quickAdd: 'Zum Schnellstart hinzufügen', quickHint: 'Kleine Icons ganz oben. Sie öffnen das Programm ganz normal in einem normalen Fenster, ohne Vollbild und ohne dass Lounge übernimmt.', ctrlL: 'Strg + L Menü', slideSec: 'Dauer pro Bild',
+  wForecast: 'Vorhersage', wTodo: 'Aufgaben', wTimer: 'Timer', wSystem: 'System', wCountdown: 'Countdown', todoPh: 'Neue Aufgabe…', timer: 'Timer', stopwatch: 'Stoppuhr', go: 'Start', reset: 'Zurücksetzen', timerDone: 'Die Zeit ist um', cpu: 'CPU', ram: 'Speicher', battery: 'Akku', uptime: 'Laufzeit',
+  today: 'Heute', tomorrow: 'Morgen', yesterday: 'Gestern', daysLeft: 'Tage noch', daysAgo: 'Tage her', cdSet: 'Tippen, um ein Datum zu setzen', cdDate: 'Datum', feels: 'Gefühlt', humid: 'Feuchte', wind: 'Wind',
+  pickProg: 'Programm wählen', looking: 'Suche Programme…', ddRunning: 'Gerade geöffnet', ddNone: 'Keine geöffneten Programme gefunden', ddSuggest: 'Vorschläge', ddMore: 'Neu mischen', ddFile: 'Datei suchen…', dest: 'Hinzufügen als', destTile: 'Kachel (Vollbild)', destQuick: 'Schnellstart (normales Fenster)', closeRun: 'Laufende App schließen',
+  mHome: 'Zurück zu Lounge', mTasks: 'Aufgabe wechseln', mFullOn: 'Vollbild', mFullOff: 'Vollbild beenden', mFullDone: 'Vollbild aus', mSplit: 'Splitscreen', mUnsplit: 'Splitscreen beenden', mSplitPick: 'Daneben anzeigen…', mClose: 'App schließen', mQuit: 'Lounge schließen', mSure: 'Wirklich?', mNone: 'Nichts vorhanden', mHint: '← → wählen  ·  Enter  ·  Esc schließt',
+  hEsc: 'Zweimal Esc schließt', hMenu: 'Strg + L öffnet das Menü', qBack: 'Lounge ist in der Taskleiste – Symbol anklicken, um zurückzukehren', rPaired: 'Handy verbunden', rMenu: 'Menü' }
+};
 const N = { en: 'English', de: 'Deutsch', es: 'Español', fr: 'Français', it: 'Italiano', pt: 'Português', nl: 'Nederlands', pl: 'Polski', tr: 'Türkçe', ru: 'Русский', ja: '日本語', zh: '中文', ko: '한국어', ar: 'العربية' };
 const APP = 'TV Launcher'; // Programmname: nur hier ändern
 const D = {};
 for (const l in L) { const a = L[l].replace(/Lounge/g, APP).split('|'); D[l] = {}; K.forEach((k, i) => { D[l][k] = a[i]; }); }
+for (const l in Y) for (const k in Y[l]) D[l][k] = Y[l][k];
 const api = {
   keys: K, dict: D, name: APP,
   langs: Object.keys(L).map(c => ({ code: c, name: N[c] })),

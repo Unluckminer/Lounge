@@ -12,7 +12,7 @@ Variante A - alle drei Systeme automatisch (empfohlen):
   1. Diesen Ordner in ein neues GitHub-Repository hochladen.
   2. Tab "Actions" > "Lounge bauen" > "Run workflow".
   3. Nach ein paar Minuten die drei Dateien unter "Artifacts" herunterladen.
-     (Mit einem Tag wie v1.2.0 legt der Workflow stattdessen ein Release an.)
+     (Mit einem Tag wie v1.3.0 legt der Workflow stattdessen ein Release an.)
 
 Variante B - nur Windows, auf dem eigenen PC:
   EXE-bauen-Windows.bat doppelklicken. Ergebnis: dist\Lounge-Windows.exe
@@ -34,3 +34,16 @@ macOS  : Beim ersten Start Rechtsklick > Oeffnen. Bei "ist beschaedigt": im Term
          Fuer das Handy-Touchpad: Bedienungshilfen erlauben, optional  brew install cliclick
 Linux  : benoetigt xdotool (X11): sudo apt install xdotool
 Fehlerprotokoll: error.log im Datenordner der App.
+
+NEU IN VERSION 1.3
+------------------
+- Klarer Hintergrund ohne Weiß-/Schwarzschleier, echtes Liquid Glass (Lichtbrechung statt nur Unschärfe, je tiefer desto stärker).
+- Widgets: weiß, in der Größe frei veränderbar (Layout bearbeiten: Ecke ziehen, S/M/L oder Umschalt + Pfeile). Neu: Vorhersage, Aufgaben, Timer/Stoppuhr, System, Countdown.
+- Einstellungen: Reiterleiste bleibt fest oben.
+- Diashow wie Apple TV: zufällige Reihenfolge, langsame Kamerafahrt, sanfte Überblendung (Bilder in renderer/wallpapers/).
+- Strg + L: Overlay-Menü unten über jeder Lounge-App (Home, Aufgabe wechseln, Vollbild an/aus, Splitscreen, App schließen, Lounge schließen). Auch per Rad-Symbol oben und per Handy-Fernbedienung (Knopf "Menü").
+- Ladeanimation beim Öffnen einer App.
+- Schnellstart ganz oben: kleine Icons, Programm öffnet sich normal (ohne Vollbild, ohne Electron-Fenster).
+- Programm hinzufügen: Dropdown mit gerade geöffneten Programmen und zufälligen Vorschlägen aus den installierten.
+Hinweis: Strg + L ist nur aktiv, solange Lounge im Vordergrund ist oder eine Lounge-App läuft, damit es in normalen Programmen frei bleibt.
+Fenster-Steuerung (Splitscreen, Vollbild aus) nutzt unter Windows PowerShell, unter Linux xdotool, unter macOS Bedienungshilfen.

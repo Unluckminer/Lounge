@@ -1,9 +1,11 @@
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let cfg = { apps: [], lang: 'en', theme: 'system', accent: '#0a84ff', h24: true, walls: [], defWalls: [], slide: true, wallDefaults: true, fontScale: 1, widgets: null }, editing = false, wxHtml = '', calKey = '', modalEl = null, modalId = null, prevFocus = null, AC = null;
+let cfg = { apps: [], quick: [], running: [], lang: 'en', theme: 'system', accent: '#0a84ff', h24: true, walls: [], defWalls: [], slide: true, slideSec: 20, wallDefaults: true, fontScale: 1, widgets: null, ctrlL: true },
+  editing = false, wxd = null, calKey = '', modalEl = null, modalId = null, prevFocus = null, AC = null, selW = null;
 const T = k => I18N.t(cfg.lang, k);
 const ACCENTS = ['#0a84ff', '#bf5af2', '#ff375f', '#ff9f0a', '#30d158', '#40c8e0', '#ffd60a', '#ac8e68'];
 const mq = matchMedia('(prefers-color-scheme: dark)');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- Darstellung ---------- */
 const colorOf = a => a.color ? `rgb(${a.color.join(',')})` : `hsl(${Math.abs([...a.name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % 360} 50% 45%)`;
@@ -16,129 +18,252 @@ function applyTheme() {
   r.style.setProperty('--fs', cfg.fontScale || 1);
   document.body.classList.toggle('still', !cfg.calm);
   if (!document.activeElement?.closest?.('.tile:not(.add)')) setBg(...idleBg());
+  window.Liquid && Liquid.refresh();
 }
 function applyLang() {
   const r = document.documentElement; r.lang = cfg.lang; r.dir = I18N.dir(cfg.lang);
   $$('[data-i]').forEach(e => { e.textContent = T(e.dataset.i); });
-  $('#gear').setAttribute('aria-label', T('settings'));
+  $('#gear').setAttribute('aria-label', T('settings')); $('#wheel').setAttribute('aria-label', T('wheel'));
   $('#dev span').textContent = cfg.deviceName || '';
   $('#editHint').textContent = T('editHint'); $('#eAdd').textContent = '+ ' + T('addWidget'); $('#eReset').textContent = T('resetLayout'); $('#eDone').textContent = T('done');
-  renderZone(); weather(); render(); pill();
+  renderZone(); weather(); render(); renderQuick(); pill();
 }
 mq.addEventListener('change', applyTheme);
 
-/* ---------- Slideshow (Hintergrund) ---------- */
-const SLIDE_MS = 60000;
-let slideT = 0, slideList = [], slideIdx = 0, slideFront = 0;
+/* ---------- Diashow (Hintergrund, angelehnt an die Apple-TV-Bildschirmschoner) ----------
+   Zufällige Reihenfolge ohne Wiederholung, langsame Kamerafahrt (Zoom + Schwenk) und ruhige Überblendung.
+   Die Kamerafahrt läuft über die Überblendung hinaus weiter, damit nichts ruckt oder stehen bleibt. */
+const FADE_MS = 2600;
+let slideT = 0, slideList = [], slideOrder = [], slideIdx = 0, slideFront = 0, slideGen = 0;
 const wallSources = () => [...(cfg.walls || []), ...(cfg.wallDefaults !== false ? (cfg.defWalls || []) : [])];
-function showWall(url, fast) {
-  const els = [$('#wall'), $('#wall2')], nxt = els[1 - slideFront], cur = els[slideFront], img = new Image();
-  img.onload = () => {
-    nxt.style.transitionDuration = fast ? '1.2s' : ''; nxt.style.backgroundImage = `url("${url}")`;
-    nxt.classList.add('on'); cur.classList.remove('on'); slideFront = 1 - slideFront;
-  };
-  img.onerror = () => { if (slideList.length > 1) setTimeout(nextWall, 500); };
-  img.src = url;
+const shuffled = n => { const a = [...Array(n).keys()]; for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+function kenburns(el, ms) {
+  el.getAnimations().forEach(a => a.cancel());
+  if (!cfg.calm || reduce) { el.style.transform = 'scale(1.04)'; return; }
+  const zin = Math.random() < .62, z0 = zin ? 1.03 : 1.15, z1 = zin ? 1.15 : 1.03, r = () => (Math.random() * 2 - 1);
+  const x0 = r() * 2.2, y0 = r() * 1.6, x1 = -x0 + r() * 1.2, y1 = -y0 + r() * .9;
+  el.animate([{ transform: `translate(${x0}%, ${y0}%) scale(${z0})` }, { transform: `translate(${x1}%, ${y1}%) scale(${z1})` }], { duration: ms + FADE_MS * 2, easing: 'linear', fill: 'forwards' });
 }
-function nextWall() { if (slideList.length < 2) return; slideIdx = (slideIdx + 1) % slideList.length; showWall(slideList[slideIdx]); }
+async function showWall(url, instant) {
+  const gen = ++slideGen, els = [$('#wall'), $('#wall2')], nxt = els[1 - slideFront], cur = els[slideFront];
+  const img = new Image(); img.src = url;
+  try { await img.decode(); } catch { if (gen === slideGen && slideList.length > 1) setTimeout(nextWall, 400); return; }
+  if (gen !== slideGen) return;
+  nxt.style.transitionDuration = instant ? '.9s' : '';
+  nxt.style.backgroundImage = `url("${url}")`;
+  kenburns(nxt, (cfg.slideSec || 20) * 1000);
+  nxt.classList.add('on'); cur.classList.remove('on'); slideFront = 1 - slideFront;
+}
+function nextWall() {
+  if (slideList.length < 2) return;
+  slideIdx = (slideIdx + 1) % slideOrder.length; showWall(slideList[slideOrder[slideIdx]]);
+  const nn = new Image(); nn.src = slideList[slideOrder[(slideIdx + 1) % slideOrder.length]];   // nächstes Bild schon vorladen
+}
 function wallStart() {
   clearInterval(slideT);
   const list = wallSources(), same = JSON.stringify(list) === JSON.stringify(slideList);
-  document.body.classList.toggle('has-wall', list.length > 0);
+  document.body.classList.toggle('has-wall', list.length > 0); document.body.classList.toggle('no-wall', !list.length);
   slideList = list;
   if (!list.length) { $$('.wl').forEach(e => { e.classList.remove('on'); e.style.backgroundImage = 'none'; }); return; }
-  if (!same || !$('.wl.on')) { slideIdx = cfg.slide ? Math.floor(Math.random() * list.length) : 0; showWall(list[slideIdx], true); }
-  else if (!cfg.slide) { slideIdx = 0; showWall(list[0], true); }
-  if (cfg.slide && list.length > 1) slideT = setInterval(nextWall, SLIDE_MS);
+  if (!same || !$('.wl.on')) { slideOrder = cfg.slide ? shuffled(list.length) : list.map((_, i) => i); slideIdx = 0; showWall(list[slideOrder[0]], true); }
+  else if (!cfg.slide) { slideOrder = list.map((_, i) => i); slideIdx = 0; showWall(list[0], true); }
+  else kenburns($$('.wl')[slideFront], (cfg.slideSec || 20) * 1000);
+  if (cfg.slide && list.length > 1) slideT = setInterval(nextWall, (cfg.slideSec || 20) * 1000);
 }
 
-/* ---------- Widgets ---------- */
-const defaultWidgets = () => [{ id: 'clock', type: 'clock', x: 0, y: 0, s: 1 }, { id: 'weather', type: 'weather', x: 66, y: 2, s: 1 }];
+/* ---------- Widgets (alle weiß, Größe frei veränderbar) ---------- */
+/* w/h = Größe in Prozent der Bildschirmbreite/-höhe, rw/rh = Bezugsgröße in px, nach der sich der Inhalt mitskaliert */
+const WT = {
+  clock:     { w: 30, h: 22, rw: 430, rh: 215, k: 'wClock' },
+  weather:   { w: 16, h: 25, rw: 250, rh: 265, k: 'wWeather' },
+  forecast:  { w: 29, h: 18, rw: 440, rh: 195, k: 'wForecast' },
+  calendar:  { w: 18, h: 36, rw: 280, rh: 330, k: 'wCal' },
+  note:      { w: 17, h: 27, rw: 250, rh: 270, k: 'wNote' },
+  todo:      { w: 17, h: 32, rw: 250, rh: 300, k: 'wTodo' },
+  timer:     { w: 17, h: 29, rw: 250, rh: 260, k: 'wTimer' },
+  world:     { w: 13, h: 18, rw: 200, rh: 170, k: 'wWorld' },
+  system:    { w: 16, h: 24, rw: 245, rh: 250, k: 'wSystem' },
+  countdown: { w: 15, h: 24, rw: 225, rh: 235, k: 'wCountdown' },
+};
+const defaultWidgets = () => [
+  { id: 'clock', type: 'clock', x: 3, y: 12, w: 30, h: 22 }, { id: 'weather', type: 'weather', x: 80, y: 12, w: 16, h: 25 },
+  { id: 'calendar', type: 'calendar', x: 61, y: 12, w: 18, h: 36 },
+];
 const widgets = () => cfg.widgets || defaultWidgets();
 const wById = id => widgets().find(w => w.id === id);
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const commit = () => { if (!cfg.widgets) cfg.widgets = defaultWidgets(); return save({ widgets: cfg.widgets }); };
 let commitT = 0; const commitSoon = () => { clearTimeout(commitT); commitT = setTimeout(commit, 400); };
-function place(el, w) { el.style.left = w.x + '%'; el.style.top = w.y + '%'; el.style.setProperty('--ws', w.s); }
+const RT = {};   // Laufzeitdaten (Timer usw.)
+const ro = new ResizeObserver(es => es.forEach(e => { const el = e.target, t = WT[el.dataset.type]; if (!t) return; el.style.setProperty('--u', clamp(Math.min(e.contentRect.width / t.rw, e.contentRect.height / t.rh), .45, 6).toFixed(3)); }));
+function place(el, w) { el.style.left = w.x + '%'; el.style.top = w.y + '%'; el.style.width = w.w + '%'; el.style.height = w.h + '%'; }
 function fit(el, w) {
-  const zr = $('#zone').getBoundingClientRect(), r = el.getBoundingClientRect(); if (!zr.width) return;
-  w.x = clamp(w.x, 0, Math.max(0, 100 - r.width / zr.width * 100)); w.y = clamp(w.y, 0, Math.max(0, 100 - r.height / zr.height * 100)); place(el, w);
+  w.w = clamp(w.w, 6, 100); w.h = clamp(w.h, 7, 100);
+  w.x = clamp(w.x, 0, 100 - w.w); w.y = clamp(w.y, 0, 100 - w.h); place(el, w);
 }
+const ICO = {
+  sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>',
+  part: '<circle cx="8.2" cy="8.2" r="2.9"/><path d="M8.2 2.6v1.3M2.6 8.2h1.3M4.2 4.2l.9.9M12.2 4.2l-.9.9"/><path d="M8.5 19.5h8.6a3.6 3.6 0 0 0 .5-7.2 5.3 5.3 0 0 0-10 1.4 3 3 0 0 0 .9 5.8z"/>',
+  cloud: '<path d="M7 18.5h10.2a4.2 4.2 0 0 0 .6-8.4A6.2 6.2 0 0 0 5.9 11.5 3.6 3.6 0 0 0 7 18.5z"/>',
+  fog: '<path d="M6.5 12.5h11a3.6 3.6 0 0 0 .3-7.1A5.3 5.3 0 0 0 7.9 6.6 3.2 3.2 0 0 0 6.5 12.5z"/><path d="M4 16h16M7 19.5h10"/>',
+  drizzle: '<path d="M7 14.5h10.2a4.2 4.2 0 0 0 .6-8.4A6.2 6.2 0 0 0 5.9 7.5 3.6 3.6 0 0 0 7 14.5z"/><path d="M9 18l-.6 1.6M13 18l-.6 1.6M17 18l-.6 1.6"/>',
+  rain: '<path d="M7 14.5h10.2a4.2 4.2 0 0 0 .6-8.4A6.2 6.2 0 0 0 5.9 7.5 3.6 3.6 0 0 0 7 14.5z"/><path d="M8.5 17.5l-1.2 3.2M12.5 17.5l-1.2 3.2M16.5 17.5l-1.2 3.2"/>',
+  snow: '<path d="M7 14.5h10.2a4.2 4.2 0 0 0 .6-8.4A6.2 6.2 0 0 0 5.9 7.5 3.6 3.6 0 0 0 7 14.5z"/><path d="M8.5 18v.1M12.5 19.6v.1M16.5 18v.1M10.5 21v.1M14.5 21v.1" stroke-width="2.4"/>',
+  storm: '<path d="M7 14.5h10.2a4.2 4.2 0 0 0 .6-8.4A6.2 6.2 0 0 0 5.9 7.5 3.6 3.6 0 0 0 7 14.5z"/><path d="M12.8 14.8 10.2 19h3.4l-1.6 3.2"/>',
+};
+const svg = k => `<svg class="ico" viewBox="0 0 24 24">${ICO[k]}</svg>`;
+const wmo = c => c === 0 ? ['wx0', 'sun'] : c <= 2 ? ['wx1', 'part'] : c === 3 ? ['wx2', 'cloud'] : c <= 48 ? ['wx3', 'fog'] : c <= 57 ? ['wx4', 'drizzle']
+  : c <= 67 ? ['wx5', 'rain'] : c <= 77 ? ['wx6', 'snow'] : c <= 82 ? ['wx7', 'rain'] : c <= 86 ? ['wx6', 'snow'] : ['wx8', 'storm'];
+
 function widgetBody(w) {
-  if (w.type === 'clock') return '<div class="w-greet"></div><div class="w-clock"></div><div class="w-date"></div>';
-  if (w.type === 'weather') return '<div class="glass widget wxb" data-f tabindex="0"></div>';
-  if (w.type === 'calendar') return '<div class="glass cal"></div>';
-  if (w.type === 'note') return `<div class="glass note"><textarea data-f spellcheck="false" placeholder="${esc(T('notePh'))}">${esc(w.text || '')}</textarea></div>`;
-  if (w.type === 'world') return `<div class="glass wrl"><div class="wl-c">${esc(w.city || '')}</div><div class="wl-t" data-tz="${esc(w.tz || '')}"></div></div>`;
+  switch (w.type) {
+    case 'clock': return '<div class="wi"><div class="w-greet"></div><div class="w-clock"></div><div class="w-date"></div></div>';
+    case 'weather': return '<div class="wi wx wxb"></div>';
+    case 'forecast': return '<div class="wi fcb"></div>';
+    case 'calendar': return '<div class="wi calb"></div>';
+    case 'note': return `<div class="wi note"><div class="wh">${esc(T('wNote'))}</div><textarea data-f spellcheck="false" placeholder="${esc(T('notePh'))}">${esc(w.text || '')}</textarea></div>`;
+    case 'todo': return `<div class="wi todo"><div class="wh">${esc(T('wTodo'))}</div><div class="tl">${(w.items || []).map((it, i) => `<button class="ti ${it.d ? 'done' : ''}" data-f data-ti="${i}"><i class="ck"></i><span>${esc(it.t)}</span><b class="tx" data-tx="${i}">×</b></button>`).join('')}</div><input type="text" data-f placeholder="${esc(T('todoPh'))}" maxlength="80"></div>`;
+    case 'timer': return '<div class="wi tmr"></div>';
+    case 'world': return `<div class="wi wrl"><div class="wl-c">${esc(w.city || '')}</div><div class="wl-t" data-tz="${esc(w.tz || '')}"></div><div class="wl-d" data-tzd="${esc(w.tz || '')}"></div></div>`;
+    case 'system': return `<div class="wi sys"><div class="wh">${esc(T('wSystem'))}</div><div class="bar"><div><span>${esc(T('cpu'))}</span><b class="s-cpu">–</b></div><div class="tr"><i class="s-cpub" style="width:0"></i></div></div><div class="bar"><div><span>${esc(T('ram'))}</span><b class="s-ram">–</b></div><div class="tr"><i class="s-ramb" style="width:0"></i></div></div><div class="bar s-batw" hidden><div><span>${esc(T('battery'))}</span><b class="s-bat">–</b></div><div class="tr"><i class="s-batb" style="width:0"></i></div></div><div class="mut s-up" style="font-size:.95em"></div></div>`;
+    case 'countdown': return '<div class="wi cd cdb" data-f tabindex="0"></div>';
+  }
   return '';
 }
 function renderZone() {
-  const z = $('#zone'); z.innerHTML = '';
+  const z = $('#zone'); ro.disconnect(); z.innerHTML = '';
   for (const w of widgets()) {
+    if (!WT[w.type]) continue;
     const el = document.createElement('div');
-    el.className = 'wd wd-' + w.type; el.dataset.wid = w.id; place(el, w);
+    el.className = 'wd wd-' + w.type + (w.type === 'clock' ? '' : ' glass'); el.dataset.wid = w.id; el.dataset.type = w.type; place(el, w);
     el.innerHTML = widgetBody(w) + '<button class="wd-x" tabindex="-1" aria-label="×">×</button><i class="wd-rs"></i>';
-    if (editing) { el.tabIndex = 0; $$('textarea', el).forEach(t => { t.tabIndex = -1; }); }
+    if (editing) { el.tabIndex = 0; $$('textarea,input', el).forEach(t => { t.tabIndex = -1; }); }
+    if (w.id === selW) el.classList.add('sel');
     const ta = $('textarea', el); if (ta) ta.oninput = () => { w.text = ta.value; commitSoon(); };
-    const wx = $('.wxb', el); if (wx) wx.onclick = () => { if (!editing) settings('general'); };
-    z.append(el);
+    z.append(el); ro.observe(el);
   }
-  calKey = ''; tick(); paintWx();
+  calKey = ''; tick(); paintWx(); paintTimers(); paintCd(); sysTick();
 }
 function calendar() {
   const d = new Date(), key = d.toDateString() + cfg.lang; if (key === calKey) return; calKey = key;
   let first = 1; try { const l = new Intl.Locale(cfg.lang); first = (l.getWeekInfo ? l.getWeekInfo() : l.weekInfo)?.firstDay || 1; } catch {}
   const y = d.getFullYear(), m = d.getMonth(), lead = (new Date(y, m, 1).getDay() + 7 - (first % 7)) % 7, days = new Date(y, m + 1, 0).getDate();
   const names = [...Array(7)].map((_, i) => new Date(2024, 0, 7 + ((first % 7) + i) % 7).toLocaleDateString(cfg.lang, { weekday: 'narrow' }));
-  const html = `<h4>${esc(d.toLocaleDateString(cfg.lang, { month: 'long', year: 'numeric' }))}</h4><div class="g">${names.map(n => `<b>${esc(n)}</b>`).join('')}${'<span></span>'.repeat(lead)}${[...Array(days)].map((_, i) => `<span class="${i + 1 === d.getDate() ? 'today' : ''}">${i + 1}</span>`).join('')}</div>`;
-  $$('.cal').forEach(e => { e.innerHTML = html; });
+  const html = `<div class="cal-h">${esc(d.toLocaleDateString(cfg.lang, { month: 'long', year: 'numeric' }))}</div><div class="cal-g">${names.map(n => `<b>${esc(n)}</b>`).join('')}${'<span></span>'.repeat(lead)}${[...Array(days)].map((_, i) => `<span class="${i + 1 === d.getDate() ? 'today' : ''}">${i + 1}</span>`).join('')}</div>`;
+  $$('.calb').forEach(e => { e.innerHTML = html; });
 }
 
 /* ---------- Begrüßung, Uhr, Wetter ---------- */
+const pad2 = n => String(n).padStart(2, '0');
 function tick() {
   const d = new Date(), h = d.getHours();
   $$('.w-greet').forEach(e => { e.textContent = T(h < 5 ? 'night' : h < 11 ? 'morning' : h < 17 ? 'day' : h < 22 ? 'evening' : 'night'); });
   $$('.w-clock').forEach(e => { e.textContent = d.toLocaleTimeString(cfg.lang, { hour: '2-digit', minute: '2-digit', hour12: !cfg.h24 }); });
   $$('.w-date').forEach(e => { e.textContent = d.toLocaleDateString(cfg.lang, { weekday: 'long', day: 'numeric', month: 'long' }); });
   $$('.wl-t').forEach(e => { try { e.textContent = d.toLocaleTimeString(cfg.lang, { hour: '2-digit', minute: '2-digit', hour12: !cfg.h24, timeZone: e.dataset.tz || undefined }); } catch { e.textContent = '–'; } });
-  calendar();
+  $$('[data-tzd]').forEach(e => {
+    try {
+      const f = z => d.toLocaleDateString('en-CA', { timeZone: z || undefined }), a = new Date(f(e.dataset.tzd)), b = new Date(f());
+      const diff = Math.round((a - b) / 864e5); e.textContent = diff === 0 ? T('today') : diff === 1 ? T('tomorrow') : diff === -1 ? T('yesterday') : '';
+    } catch { e.textContent = ''; }
+  });
+  calendar(); paintTimers(); paintCd();
 }
-const paintWx = () => $$('.wxb').forEach(e => { e.innerHTML = wxHtml; });
-const wmo = c => c === 0 ? ['wx0', '☀️'] : c <= 2 ? ['wx1', '⛅'] : c === 3 ? ['wx2', '☁️'] : c <= 48 ? ['wx3', '🌫️'] : c <= 57 ? ['wx4', '🌦️']
-  : c <= 67 ? ['wx5', '🌧️'] : c <= 77 ? ['wx6', '🌨️'] : c <= 82 ? ['wx7', '🌦️'] : c <= 86 ? ['wx6', '🌨️'] : ['wx8', '⛈️'];
+function paintWx() {
+  const R = Math.round, u = cfg.fahr ? '°' : '°';
+  $$('.wxb').forEach(e => {
+    if (cfg.lat == null) { e.innerHTML = `<div class="wh">${esc(T('wWeather'))}</div>${svg('cloud')}<div class="wx-d">${esc(T('city'))}</div>`; return; }
+    if (!wxd) { e.innerHTML = '<div class="wx-d">–</div>'; return; }
+    const [k, i] = wmo(wxd.code);
+    e.innerHTML = `<div class="wx-top">${svg(i)}<div class="wx-t">${R(wxd.t)}${u}</div></div><div><div class="wx-c">${esc(cfg.city)}</div><div class="wx-d">${esc(T(k))}</div><div class="wx-hl">${R(wxd.days[0].hi)}${u} / ${R(wxd.days[0].lo)}${u}</div></div><div class="wx-m"><span>${esc(T('feels'))} ${R(wxd.feels)}${u}</span><span>${esc(T('humid'))} ${R(wxd.hum)}%</span><span>${esc(T('wind'))} ${R(wxd.wind)} ${cfg.fahr ? 'mph' : 'km/h'}</span></div>`;
+  });
+  $$('.fcb').forEach(e => {
+    if (!wxd) { e.innerHTML = `<div class="wh">${esc(T('wForecast'))}</div><div class="wx-d">${cfg.lat == null ? esc(T('city')) : '–'}</div>`; return; }
+    e.innerHTML = `<div class="wh">${esc(T('wForecast'))} · ${esc(cfg.city)}</div><div class="fc-row">${wxd.days.map((d, i) => `<div class="fc"><b>${esc(i === 0 ? T('today') : new Date(d.date + 'T12:00').toLocaleDateString(cfg.lang, { weekday: 'short' }))}</b>${svg(wmo(d.code)[1])}<span class="hi">${R(d.hi)}${u}</span><span class="lo">${R(d.lo)}${u}</span><span class="rn">${d.rain != null ? R(d.rain) + '%' : ''}</span></div>`).join('')}</div>`;
+  });
+}
 async function weather() {
-  if (cfg.lat == null) { wxHtml = `<div><div class="ws" style="margin:0">☁️</div><div class="ws">${esc(T('city'))}</div></div>`; paintWx(); return; }
+  if (cfg.lat == null) { wxd = null; paintWx(); return; }
   try {
-    const u = `https://api.open-meteo.com/v1/forecast?latitude=${cfg.lat}&longitude=${cfg.lon}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1${cfg.fahr ? '&temperature_unit=fahrenheit' : ''}`;
-    const r = await (await fetch(u)).json(), [k, i] = wmo(r.current.weather_code), R = Math.round;
-    wxHtml = `<div class="wi">${i}</div><div><div class="wt">${R(r.current.temperature_2m)}°</div><div class="ws">${esc(cfg.city)}</div><div class="ws">${esc(T(k))}, ${R(r.daily.temperature_2m_max[0])}° / ${R(r.daily.temperature_2m_min[0])}°</div></div>`;
-  } catch { wxHtml = '<div class="ws">–</div>'; }
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${cfg.lat}&longitude=${cfg.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=5${cfg.fahr ? '&temperature_unit=fahrenheit&wind_speed_unit=mph' : ''}`;
+    const r = await (await fetch(u)).json(), c = r.current, d = r.daily;
+    wxd = { t: c.temperature_2m, feels: c.apparent_temperature, hum: c.relative_humidity_2m, wind: c.wind_speed_10m, code: c.weather_code,
+      days: d.time.map((t, i) => ({ date: t, code: d.weather_code[i], hi: d.temperature_2m_max[i], lo: d.temperature_2m_min[i], rain: d.precipitation_probability_max?.[i] })) };
+  } catch { wxd = null; }
   paintWx();
+}
+
+/* Timer / Stoppuhr */
+const timerOf = id => RT[id] || (RT[id] = { mode: 'timer', set: 300, left: 300, run: false, end: 0, t0: 0, acc: 0 });
+const fmt = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ':' + pad2(m) : pad2(m)) + ':' + pad2(s % 60); };
+function paintTimers() {
+  $$('.wd-timer').forEach(el => {
+    const id = el.dataset.wid, t = timerOf(id), box = $('.tmr', el);
+    if (t.run && t.mode === 'timer') { t.left = (t.end - Date.now()) / 1000; if (t.left <= 0) { t.left = 0; t.run = false; timerDone(); } }
+    const val = t.mode === 'timer' ? t.left : (t.run ? t.acc + (Date.now() - t.t0) / 1000 : t.acc), key = [t.mode, t.run, t.set].join();
+    if (box.dataset.k !== key) {
+      box.dataset.k = key;
+      box.innerHTML = `<div class="tm-m"><button class="btn2 ${t.mode === 'timer' ? 'on' : ''}" data-f data-tm="timer">${esc(T('timer'))}</button><button class="btn2 ${t.mode === 'sw' ? 'on' : ''}" data-f data-tm="sw">${esc(T('stopwatch'))}</button></div><div class="tm-t"></div>
+        <div class="tm-p">${t.mode === 'timer' ? [1, 5, 10, 25].map(m => `<button class="btn2" data-f data-tp="${m}">${m}′</button>`).join('') : ''}</div>
+        <div class="tm-c"><button class="btn2 on" data-f data-ta="go">${esc(T(t.run ? 'pause' : 'go'))}</button><button class="btn2" data-f data-ta="rs">${esc(T('reset'))}</button></div>`;
+    }
+    $('.tm-t', box).textContent = fmt(val);
+  });
+}
+function timerDone() {
+  blip(880); setTimeout(() => blip(880), 260); setTimeout(() => blip(1175), 520);
+  if (window.api) api.toast(T('timer'), T('timerDone'), 6000);
+}
+/* Countdown bis zu einem Datum */
+function paintCd() {
+  $$('.cdb').forEach(e => {
+    const w = wById(e.closest('.wd').dataset.wid); if (!w) return;
+    if (!w.date) { e.innerHTML = `<div class="wh" style="justify-content:center">${esc(T('wCountdown'))}</div><div class="cd-u">${esc(T('cdSet'))}</div>`; return; }
+    const a = new Date(w.date + 'T00:00'), b = new Date(); b.setHours(0, 0, 0, 0);
+    const n = Math.round((a - b) / 864e5), key = w.date + '|' + n + '|' + w.name + cfg.lang; if (e.dataset.k === key) return; e.dataset.k = key;
+    e.innerHTML = `<div class="cd-n">${n === 0 ? '🎉'.replace('🎉', '0') : Math.abs(n)}</div><div class="cd-u">${esc(n === 0 ? T('today') : n > 0 ? T('daysLeft') : T('daysAgo'))}</div><div class="cd-t">${esc(w.name || '')}</div>`;
+  });
+}
+/* System: CPU, Speicher, Akku, Laufzeit */
+let sysT = 0;
+async function sysTick() {
+  clearTimeout(sysT);
+  const els = $$('.wd-system'); if (!els.length || !window.api) return;
+  try {
+    const s = await api.sys(), P = v => Math.round(v * 100) + ' %';
+    $$('.s-cpu').forEach(e => { e.textContent = P(s.cpu); }); $$('.s-cpub').forEach(e => { e.style.width = s.cpu * 100 + '%'; });
+    $$('.s-ram').forEach(e => { e.textContent = P(s.mem); }); $$('.s-ramb').forEach(e => { e.style.width = s.mem * 100 + '%'; });
+    const d = Math.floor(s.up / 86400), h = Math.floor(s.up % 86400 / 3600), m = Math.floor(s.up % 3600 / 60);
+    $$('.s-up').forEach(e => { e.textContent = `${T('uptime')}: ${d ? d + ' d ' : ''}${h} h ${m} min`; });
+    if (navigator.getBattery) { const b = await navigator.getBattery(); if (b && b.level != null && !(b.charging && b.level === 1 && b.chargingTime === 0 && b.dischargingTime === Infinity && false)) { $$('.s-batw').forEach(e => { e.hidden = false; }); $$('.s-bat').forEach(e => { e.textContent = Math.round(b.level * 100) + ' %' + (b.charging ? ' ⚡' : ''); }); $$('.s-batb').forEach(e => { e.style.width = b.level * 100 + '%'; }); } }
+  } catch {}
+  sysT = setTimeout(sysTick, 2500);
 }
 
 /* ---------- Layout bearbeiten ---------- */
 function enterEdit() {
   closeModal(); editing = true; document.body.classList.add('editing'); $('#editbar').hidden = false;
-  $$('.wd').forEach(e => { e.tabIndex = 0; }); $$('.wd textarea').forEach(t => { t.tabIndex = -1; });
+  $$('.wd').forEach(e => { e.tabIndex = 0; }); $$('.wd textarea,.wd input').forEach(t => { t.tabIndex = -1; });
   ($('.wd') || $('#eDone')).focus();
 }
 async function exitEdit() {
-  editing = false; document.body.classList.remove('editing'); $('#editbar').hidden = true;
-  $$('.wd').forEach(e => e.removeAttribute('tabindex')); $$('.wd textarea').forEach(t => { t.tabIndex = 0; });
+  editing = false; selW = null; document.body.classList.remove('editing'); $('#editbar').hidden = true;
+  $$('.wd').forEach(e => { e.removeAttribute('tabindex'); e.classList.remove('sel'); }); $$('.wd textarea,.wd input').forEach(t => { t.tabIndex = 0; });
   await commit(); $('.tile')?.focus();
 }
+const select = id => { selW = id; $$('.wd').forEach(e => e.classList.toggle('sel', e.dataset.wid === id)); };
 async function removeWidget(id) { cfg.widgets = widgets().filter(w => w.id !== id); await commit(); renderZone(); ($('.wd') || $('#eAdd')).focus(); }
 async function addWidget(w) {
-  const n = widgets().length; Object.assign(w, { id: w.type + '-' + Date.now().toString(36), x: 34 + (n * 9) % 40, y: 6 + (n * 8) % 30, s: 1 });
+  const t = WT[w.type], n = widgets().length;
+  Object.assign(w, { id: w.type + '-' + Date.now().toString(36), x: 30 + (n * 7) % 40, y: 10 + (n * 6) % 30, w: t.w, h: t.h });
   cfg.widgets = [...widgets(), w]; await commit(); renderZone(); closeModal();
-  const el = $(`.wd[data-wid="${w.id}"]`); if (el) { fit(el, w); commitSoon(); }
+  const el = $(`.wd[data-wid="${w.id}"]`); if (el) { fit(el, w); commitSoon(); select(w.id); }
   if (editing) el?.focus(); else enterEdit();
 }
 function addWidgetModal() {
-  const have = new Set(widgets().map(w => w.type));
-  const opts = [['calendar', 'wCal'], ['note', 'wNote'], ['world', 'wWorld'], ['clock', 'wClock'], ['weather', 'wWeather']].filter(([t]) => ['calendar', 'note', 'world'].includes(t) || !have.has(t));
-  const m = modal('addw', `<h2>${esc(T('addWidget'))}</h2><div class="stack">${opts.map(([t, k]) => `<button class="btn" data-f data-wt="${t}">${esc(T(k))}</button>`).join('')}<button class="btn" data-f id="wx">${esc(T('cancel'))}</button></div>`);
-  $$('[data-wt]', m).forEach(b => b.onclick = () => b.dataset.wt === 'world' ? worldForm() : addWidget({ type: b.dataset.wt }));
+  const types = Object.keys(WT);
+  const m = modal('addw', `<h2>${esc(T('addWidget'))}</h2><div class="chips" style="gap:.7rem">${types.map(t => `<button class="btn" data-f data-wt="${t}" style="flex:0 0 calc(50% - .4rem)">${esc(T(WT[t].k))}</button>`).join('')}</div><div class="actions"><button class="btn" data-f id="wx">${esc(T('cancel'))}</button></div>`);
+  $$('[data-wt]', m).forEach(b => b.onclick = () => b.dataset.wt === 'world' ? worldForm() : b.dataset.wt === 'countdown' ? countdownForm() : addWidget({ type: b.dataset.wt }));
   $('#wx', m).onclick = () => { closeModal(); if (editing) $('.wd')?.focus(); };
 }
 function worldForm() {
@@ -154,42 +279,116 @@ function worldForm() {
     } catch { msg.textContent = '–'; }
   };
 }
+function countdownForm(w) {
+  const m = modal('cd', `<h2>${esc(T('wCountdown'))}</h2><label>${esc(T('name'))}</label><input type="text" data-f id="cn" maxlength="30" value="${esc(w?.name || '')}"><label>${esc(T('cdDate'))}</label><input type="date" data-f id="cdt" value="${esc(w?.date || '')}">
+    <div class="actions"><button class="btn" data-f id="cback">${esc(w ? T('cancel') : T('back'))}</button><button class="btn primary" data-f id="cok">${esc(T('apply'))}</button></div>`);
+  $('#cn', m).focus(); $('#cback', m).onclick = w ? closeModal : addWidgetModal;
+  $('#cok', m).onclick = async () => {
+    const name = $('#cn', m).value.trim(), date = $('#cdt', m).value; if (!date) { $('#cdt', m).focus(); return; }
+    if (w) { w.name = name; w.date = date; await commit(); renderZone(); closeModal(); } else addWidget({ type: 'countdown', name, date });
+  };
+}
 let drag = null;
 $('#zone').addEventListener('pointerdown', e => {
   if (!editing) return;
   const el = e.target.closest('.wd'); if (!el) return;
+  if (!cfg.widgets) cfg.widgets = defaultWidgets();
   const w = wById(el.dataset.wid); if (!w) return;
   if (e.target.closest('.wd-x')) { e.preventDefault(); removeWidget(w.id); return; }
-  if (!cfg.widgets) cfg.widgets = defaultWidgets();
-  const w2 = wById(el.dataset.wid);
-  drag = { el, w: w2, rs: !!e.target.closest('.wd-rs'), sx: e.clientX, sy: e.clientY, x0: w2.x, y0: w2.y, s0: w2.s, zr: $('#zone').getBoundingClientRect(), r0: el.getBoundingClientRect() };
+  select(w.id);
+  drag = { el, w, rs: !!e.target.closest('.wd-rs'), sx: e.clientX, sy: e.clientY, x0: w.x, y0: w.y, w0: w.w, h0: w.h, zr: $('#zone').getBoundingClientRect() };
   el.setPointerCapture(e.pointerId); el.focus(); e.preventDefault();
 });
 $('#zone').addEventListener('pointermove', e => {
-  if (!drag) return; const d = drag, dx = e.clientX - d.sx, dy = e.clientY - d.sy;
-  if (d.rs) d.w.s = +clamp(d.s0 * (1 + (dx / d.r0.width + dy / d.r0.height) / 2), .4, 3.5).toFixed(3);
-  else { d.w.x = d.x0 + dx / d.zr.width * 100; d.w.y = d.y0 + dy / d.zr.height * 100; }
-  place(d.el, d.w); fit(d.el, d.w);
+  if (!drag) return; const d = drag, dx = (e.clientX - d.sx) / d.zr.width * 100, dy = (e.clientY - d.sy) / d.zr.height * 100, sn = v => Math.round(v * 2) / 2;
+  if (d.rs) { d.w.w = sn(d.w0 + dx); d.w.h = sn(d.h0 + dy); if (d.w.x + d.w.w > 100) d.w.w = 100 - d.w.x; if (d.w.y + d.w.h > 100) d.w.h = 100 - d.w.y; }
+  else { d.w.x = sn(d.x0 + dx); d.w.y = sn(d.y0 + dy); }
+  fit(d.el, d.w);
 });
 const endDrag = () => { if (drag) { drag = null; commit(); } };
 $('#zone').addEventListener('pointerup', endDrag); $('#zone').addEventListener('pointercancel', endDrag);
 $('#eAdd').onclick = addWidgetModal; $('#eDone').onclick = exitEdit;
-$('#eReset').onclick = async () => { cfg.widgets = null; await save({ widgets: null }); renderZone(); $('.wd')?.focus(); };
-/* Tastatur im Bearbeitungsmodus: Pfeile verschieben, Umschalt + Pfeile skalieren, Entf entfernt */
+$('#eReset').onclick = async () => { cfg.widgets = null; selW = null; await save({ widgets: null }); renderZone(); $('.wd')?.focus(); };
+$$('[data-sz]').forEach(b => b.onclick = async () => {
+  const w = selW && wById(selW); if (!w) return; const t = WT[w.type], k = +b.dataset.sz;
+  w.w = +(t.w * k).toFixed(1); w.h = +(t.h * k).toFixed(1);
+  const el = $(`.wd[data-wid="${w.id}"]`); fit(el, w); await commit(); el.focus();
+});
+/* Tastatur im Bearbeitungsmodus: Pfeile verschieben, Umschalt + Pfeile ändern die Größe, Entf entfernt */
 function editKey(e) {
   if (e.key === 'Escape') { e.preventDefault(); exitEdit(); return true; }
   const el = e.target.closest?.('.wd'); if (!el) return false;
   if (!cfg.widgets) cfg.widgets = defaultWidgets();
   const w = wById(el.dataset.wid); if (!w) return false;
   if (e.key.startsWith('Arrow')) {
-    e.preventDefault();
-    if (e.shiftKey) w.s = +clamp(w.s * (e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1.05 : 1 / 1.05), .4, 3.5).toFixed(3);
-    else { const v = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; w.x += v[0]; w.y += v[1]; }
-    place(el, w); fit(el, w); commitSoon(); return true;
+    e.preventDefault(); select(w.id);
+    const v = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (e.shiftKey) { w.w += v[0] * 1.5; w.h += v[1] * 2; } else { w.x += v[0]; w.y += v[1]; }
+    fit(el, w); commitSoon(); return true;
   }
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeWidget(w.id); return true; }
   if (e.key === 'Enter') { e.preventDefault(); exitEdit(); return true; }
   return false;
+}
+/* Bedienung der Widgets im normalen Modus (Timer, Aufgaben, Countdown) */
+$('#zone').addEventListener('click', async e => {
+  if (editing) return;
+  const el = e.target.closest('.wd'); if (!el) return;
+  const id = el.dataset.wid, w = wById(id);
+  const tm = e.target.closest('[data-tm],[data-tp],[data-ta]');
+  if (tm) {
+    const t = timerOf(id);
+    if (tm.dataset.tm) { t.mode = tm.dataset.tm; t.run = false; t.acc = 0; t.left = t.set; }
+    else if (tm.dataset.tp) { t.set = +tm.dataset.tp * 60; t.left = t.set; t.run = false; }
+    else if (tm.dataset.ta === 'go') {
+      if (t.run) { if (t.mode === 'sw') t.acc += (Date.now() - t.t0) / 1000; else t.left = (t.end - Date.now()) / 1000; t.run = false; }
+      else { t.run = true; if (t.mode === 'timer') { if (t.left <= 0) t.left = t.set; t.end = Date.now() + t.left * 1000; } else t.t0 = Date.now(); }
+    } else { t.run = false; t.acc = 0; t.left = t.set; }
+    const box = $('.tmr', el); box.dataset.k = ''; paintTimers(); $(`[data-ta="go"]`, el)?.focus(); return;
+  }
+  if (w && w.type === 'todo') {
+    const x = e.target.closest('[data-tx]'), it = e.target.closest('[data-ti]');
+    if (x) { w.items.splice(+x.dataset.tx, 1); await commit(); const sc = $('.tl', el).scrollTop; renderZone(); return; }
+    if (it) { const i = +it.dataset.ti; w.items[i].d = !w.items[i].d; await commit(); renderZone(); $(`.wd[data-wid="${id}"] [data-ti="${i}"]`)?.focus(); }
+  }
+  if (w && w.type === 'countdown') countdownForm(w);
+  if (w && w.type === 'weather') settings('general');
+});
+$('#zone').addEventListener('keydown', async e => {
+  if (editing || e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+  const el = e.target.closest('.wd'), w = el && wById(el.dataset.wid); if (!w || w.type !== 'todo') return;
+  const v = e.target.value.trim(); if (!v) return;
+  e.stopPropagation(); e.preventDefault();
+  if (!cfg.widgets) cfg.widgets = defaultWidgets(); const w2 = wById(w.id); w2.items = [...(w2.items || []), { t: v, d: false }];
+  await commit(); renderZone(); $(`.wd[data-wid="${w.id}"] input`)?.focus();
+}, true);
+
+/* ---------- Schnellstart (ganz oben): kleine Icons, normale Programme ohne Vollbild ---------- */
+function renderQuick() {
+  const q = $('#qbar'); q.innerHTML = '';
+  for (const a of cfg.quick) {
+    const b = document.createElement('button');
+    b.className = 'qi'; b.dataset.f = 1; b.dataset.q = a.id; b.setAttribute('aria-label', a.name);
+    b.innerHTML = (a.icon ? `<img src="${a.icon}" alt="">` : `<span class="mono">${esc((a.name[0] || '?').toUpperCase())}</span>`) + `<span class="qn">${esc(a.name)}</span>`;
+    b.onclick = () => { blip(700); api.quickLaunch(a.id); };
+    b.oncontextmenu = e => { e.preventDefault(); quickOptions(a); };
+    q.append(b);
+  }
+  if (!cfg.quick.length) { const l = document.createElement('span'); l.className = 'qlabel'; l.textContent = T('quick'); q.append(l); }
+  const add = document.createElement('button'); add.className = 'qi add'; add.dataset.f = 1; add.setAttribute('aria-label', T('quickAdd')); add.textContent = '+';
+  add.innerHTML = `+<span class="qn">${esc(T('quickAdd'))}</span>`; add.onclick = () => form(null, 'quick'); q.append(add);
+}
+function quickOptions(a) {
+  const i = cfg.quick.findIndex(x => x.id === a.id);
+  const m = modal('qopt', `<h2>${esc(a.name)}</h2><div class="stack">
+    <button class="btn primary" data-f id="o-open">${esc(T('open'))}</button>
+    ${i > 0 ? `<button class="btn" data-f id="o-l">← ${esc(T('moveL'))}</button>` : ''}${i < cfg.quick.length - 1 ? `<button class="btn" data-f id="o-r">${esc(T('moveR'))} →</button>` : ''}
+    <button class="btn danger" data-f id="o-del">${esc(T('remove'))}</button><button class="btn" data-f id="o-x">${esc(T('close'))}</button></div>`);
+  $('#o-open', m).onclick = () => { closeModal(); api.quickLaunch(a.id); };
+  if ($('#o-l', m)) $('#o-l', m).onclick = async () => { await api.moveApp(a.id, -1, true); closeModal(); };
+  if ($('#o-r', m)) $('#o-r', m).onclick = async () => { await api.moveApp(a.id, 1, true); closeModal(); };
+  let sure = false; $('#o-del', m).onclick = e => { if (!sure) { sure = true; e.target.textContent = T('sure'); } else { closeModal(); api.removeApp(a.id, true); } };
+  $('#o-x', m).onclick = closeModal;
 }
 
 /* ---------- Kacheln ---------- */
@@ -199,7 +398,7 @@ function render() {
   for (const a of cfg.apps) {
     const t = document.createElement('button');
     t.className = 'tile'; t.dataset.f = 1; t.dataset.id = a.id; t.style.setProperty('--c', colorOf(a));
-    t.innerHTML = `<div class="card">${a.icon ? `<img src="${a.icon}" alt="">` : `<span class="mono">${esc((a.name[0] || '?').toUpperCase())}</span>`}</div><div class="name">${esc(a.name)}</div>`;
+    t.innerHTML = `<div class="card">${a.icon ? `<img src="${a.icon}" alt="">` : `<span class="mono">${esc((a.name[0] || '?').toUpperCase())}</span>`}</div><div class="name">${esc(a.name)}</div>${(cfg.running || []).includes(a.id) ? '<i class="run"></i>' : ''}`;
     t.onclick = () => { blip(700); api.launch(a.id); };
     t.oncontextmenu = e => { e.preventDefault(); options(a); };
     row.append(t);
@@ -211,13 +410,24 @@ function render() {
 }
 function pill() { $('#pill').hidden = cfg.paired > 0; }
 function blip(f = 520) {
-  if (!cfg.sounds) return;
+  if (!cfg.sounds && f < 800) return;
   try {
     AC = AC || new AudioContext(); const o = AC.createOscillator(), g = AC.createGain();
     o.type = 'sine'; o.frequency.value = f; g.gain.value = .035; o.connect(g); g.connect(AC.destination);
     g.gain.setTargetAtTime(0, AC.currentTime + .03, .02); o.start(); o.stop(AC.currentTime + .1);
   } catch {}
 }
+
+/* ---------- Ladeanimation: Kachel wächst zum Vollbild, während die App im Hintergrund startet ---------- */
+function launching(a) {
+  const L = $('#launch'), tile = $(`.tile[data-id="${a.id}"] .card`);
+  const from = tile ? tile.getBoundingClientRect() : { left: innerWidth / 2 - 115, top: innerHeight / 2 - 72, width: 230, height: 144 };
+  L.style.setProperty('--c', colorOf(a)); L.className = 'on';
+  L.innerHTML = `<div class="lbg"></div><div class="lwrap"><div class="lcard">${a.icon ? `<img src="${a.icon}" alt="">` : `<span class="mono">${esc((a.name[0] || '?').toUpperCase())}</span>`}</div></div><i class="lring"></i><div class="lname">${esc(a.name)}</div>`;
+  const card = $('.lcard', L), to = card.getBoundingClientRect();
+  if (!reduce) card.animate([{ transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})` }, { transform: 'none' }], { duration: 620, easing: 'cubic-bezier(.2,.85,.2,1)', fill: 'both' });
+}
+const launchReset = () => { const L = $('#launch'); L.className = ''; L.innerHTML = ''; };
 
 /* ---------- Dialoge ---------- */
 function modal(id, html, cls = '') {
@@ -268,15 +478,17 @@ function welcome(step = 0) {
 
 /* ---------- Kachel-Menü und Formular ---------- */
 function options(a) {
-  const i = cfg.apps.findIndex(x => x.id === a.id);
+  const i = cfg.apps.findIndex(x => x.id === a.id), run = (cfg.running || []).includes(a.id);
   const m = modal('options', `<h2>${esc(a.name)}</h2><div class="stack">
     <button class="btn primary" data-f id="o-open">${esc(T('open'))}</button>
+    ${run ? `<button class="btn" data-f id="o-stop">${esc(T('closeRun'))}</button>` : ''}
     <button class="btn" data-f id="o-edit">${esc(T('edit'))}</button>
     ${i > 0 ? `<button class="btn" data-f id="o-l">← ${esc(T('moveL'))}</button>` : ''}
     ${i < cfg.apps.length - 1 ? `<button class="btn" data-f id="o-r">${esc(T('moveR'))} →</button>` : ''}
     <button class="btn danger" data-f id="o-del">${esc(T('remove'))}</button>
     <button class="btn" data-f id="o-x">${esc(T('close'))}</button></div>`);
   $('#o-open', m).onclick = () => { closeModal(); api.launch(a.id); };
+  if ($('#o-stop', m)) $('#o-stop', m).onclick = () => { closeModal(); api.closeApp(a.id); };
   $('#o-edit', m).onclick = () => form(a);
   if ($('#o-l', m)) $('#o-l', m).onclick = async () => { await api.moveApp(a.id, -1); closeModal(); };
   if ($('#o-r', m)) $('#o-r', m).onclick = async () => { await api.moveApp(a.id, 1); closeModal(); };
@@ -284,33 +496,54 @@ function options(a) {
   $('#o-del', m).onclick = e => { if (!sure) { sure = true; e.target.textContent = T('sure'); } else { closeModal(); api.removeApp(a.id); } };
   $('#o-x', m).onclick = closeModal;
 }
-function form(edit) {
-  const S = { type: edit ? edit.type : 'web', icon: edit ? 'keep' : 'auto', iconPath: null, engine: edit?.engine || 'auto', exe: edit && edit.type === 'exe' ? edit.target : '', touched: !!edit };
-  const m = modal('form', `<h2>${esc(T(edit ? 'editT' : 'addT'))}</h2>
-    <div class="seg" ${edit ? 'hidden' : ''}><button class="btn" data-f data-type="web">${esc(T('web'))}</button><button class="btn" data-f data-type="exe">${esc(T('prog'))}</button></div>
+const ddItem = (p, i, sec) => `<button class="dd-i" data-f data-p="${sec}:${i}"><i>${p.icon ? `<img src="${p.icon}" alt="">` : esc((p.name[0] || '?').toUpperCase())}</i><div><b>${esc(p.name)}</b><small>${esc(p.sub || p.target)}</small></div></button>`;
+function form(edit, dest) {
+  const S = { type: edit ? edit.type : (dest === 'quick' ? 'exe' : 'web'), dest: dest === 'quick' ? 'quick' : 'tile', icon: edit ? 'keep' : 'auto', iconPath: null, engine: edit?.engine || 'auto',
+    exe: edit && edit.type === 'exe' ? edit.target : '', args: edit?.args || [], touched: !!edit, list: null, open: false };
+  const m = modal('form', `<h2>${esc(T(edit ? 'editT' : dest === 'quick' ? 'quickAdd' : 'addT'))}</h2>
+    <div class="seg" ${edit || dest === 'quick' ? 'hidden' : ''}><button class="btn" data-f data-type="web">${esc(T('web'))}</button><button class="btn" data-f data-type="exe">${esc(T('prog'))}</button></div>
     <div id="fw"><label>${esc(T('addr'))}</label><input type="text" data-f id="url" placeholder="netflix.com" value="${edit && edit.type === 'web' ? esc(edit.target) : ''}"></div>
-    <div id="fe"><label>${esc(T('prog'))}</label><div class="line"><button class="btn" data-f id="pick">${esc(T('pick'))}</button><span class="hint" id="exeName"></span></div></div>
+    <div id="fe"><label>${esc(T('prog'))}</label><div class="pk"><button class="btn" data-f id="pick">${esc(T('pickProg'))} ▾</button><span class="hint" id="exeName" style="margin:0"></span></div><div class="dd" id="dd" hidden></div></div>
+    <div id="fd" ${edit ? 'hidden' : ''}><label>${esc(T('dest'))}</label><div class="seg"><button class="btn" data-f data-dest="tile">${esc(T('destTile'))}</button><button class="btn" data-f data-dest="quick">${esc(T('destQuick'))}</button></div></div>
     <div id="fb"><label>${esc(T('browser'))}</label><div class="seg"><button class="btn" data-f data-eng="auto">${esc(T('auto'))}</button><button class="btn" data-f data-eng="builtin">${esc(T('bBuilt'))}</button><button class="btn" data-f data-eng="edge">${esc(T('bEdge'))}</button></div></div>
     <label>${esc(T('name'))}</label><input type="text" data-f id="name" value="${edit ? esc(edit.name) : ''}">
     <label>${esc(T('image'))}</label>
     <div class="seg"><button class="btn" data-f data-icon="${edit ? 'keep' : 'auto'}">${esc(T(edit ? 'keep' : 'auto'))}</button><button class="btn" data-f data-icon="file">${esc(T('own'))}</button></div>
-    <div class="actions"><button class="btn" data-f id="cancel">${esc(T('cancel'))}</button><button class="btn primary" data-f id="ok">${esc(T('save'))}</button></div>`);
+    <div class="actions"><button class="btn" data-f id="cancel">${esc(T('cancel'))}</button><button class="btn primary" data-f id="ok">${esc(T('save'))}</button></div>`, 'wide');
   const nm = $('#name', m);
   const sync = () => {
     $$('[data-type]', m).forEach(b => b.classList.toggle('on', b.dataset.type === S.type));
-    $('#fw', m).hidden = S.type !== 'web'; $('#fb', m).hidden = S.type !== 'web'; $('#fe', m).hidden = S.type !== 'exe';
+    $$('[data-dest]', m).forEach(b => b.classList.toggle('on', b.dataset.dest === S.dest));
+    $('#fw', m).hidden = S.type !== 'web'; $('#fb', m).hidden = S.type !== 'web' || S.dest === 'quick'; $('#fe', m).hidden = S.type !== 'exe'; $('#fd', m).hidden = !!edit || S.type !== 'exe';
     $$('[data-eng]', m).forEach(b => b.classList.toggle('on', b.dataset.eng === S.engine));
     $$('[data-icon]', m).forEach(b => b.classList.toggle('on', b.dataset.icon === S.icon));
     $('#exeName', m).textContent = S.exe ? S.exe.split(/[\\/]/).pop() : '';
   };
   const guess = t => { if (!S.touched) nm.value = t; };
   nm.oninput = () => { S.touched = true; };
-  $$('[data-type]', m).forEach(b => b.onclick = () => { S.type = b.dataset.type; sync(); });
+  $$('[data-type]', m).forEach(b => b.onclick = () => { S.type = b.dataset.type; if (S.type === 'web') S.dest = 'tile'; sync(); });
+  $$('[data-dest]', m).forEach(b => b.onclick = () => { S.dest = b.dataset.dest; sync(); });
   $$('[data-eng]', m).forEach(b => b.onclick = () => { S.engine = b.dataset.eng; sync(); });
   $('#url', m).oninput = e => {
     try { const v = e.target.value; guess(new URL(/^https?:/i.test(v) ? v : 'https://' + v).hostname.replace(/^www\./, '').split('.')[0].replace(/^./, c => c.toUpperCase())); } catch {}
   };
-  $('#pick', m).onclick = async () => { const p = await api.pickExe(); if (p) { S.exe = p; guess(p.split(/[\\/]/).pop().replace(/\.(exe|app)$/i, '')); sync(); } };
+  /* Dropdown: erst die gerade geöffneten Programme, darunter zufällige Vorschläge aus den installierten */
+  const dd = $('#dd', m);
+  const choose = p => { S.exe = p.target; S.args = p.args || []; if (p.iconFile && S.icon === 'auto') { /* Linux: Symbol aus dem Systemthema */ } guess(p.name); S.open = false; dd.hidden = true; sync(); refocus('#name'); };
+  const fill = () => {
+    const L = S.list; if (!L) { dd.innerHTML = `<h5>${esc(T('looking'))}</h5>`; return; }
+    dd.innerHTML = `<h5>${esc(T('ddRunning'))}</h5>${L.running.length ? L.running.map((p, i) => ddItem(p, i, 'r')).join('') : `<div class="hint" style="padding:.2rem .8rem">${esc(T('ddNone'))}</div>`}
+      <h5>${esc(T('ddSuggest'))}<button class="btn" data-f id="shuf" style="padding:.25rem .8rem;font-size:.9rem">↻ ${esc(T('ddMore'))}</button></h5>${L.suggest.map((p, i) => ddItem(p, i, 's')).join('')}
+      <h5></h5><button class="dd-i" data-f id="browse"><i>…</i><div><b>${esc(T('ddFile'))}</b></div></button>`;
+    $$('[data-p]', dd).forEach(b => b.onclick = () => { const [s, i] = b.dataset.p.split(':'); choose((s === 'r' ? L.running : L.suggest)[+i]); });
+    $('#browse', dd).onclick = async () => { const p = await api.pickExe(); if (p) { S.exe = p; S.args = []; guess(p.split(/[\\/]/).pop().replace(/\.(exe|app)$/i, '')); S.open = false; dd.hidden = true; sync(); refocus('#name'); } };
+    $('#shuf', dd).onclick = async () => { S.list = null; fill(); S.list = await api.programs(); fill(); refocus('#shuf'); };
+  };
+  $('#pick', m).onclick = async () => {
+    S.open = !S.open; dd.hidden = !S.open; if (!S.open) return;
+    fill(); if (!S.list) { S.list = await api.programs(); fill(); }
+    $('[data-p]', dd)?.focus();
+  };
   $$('[data-icon]', m).forEach(b => b.onclick = async () => {
     if (b.dataset.icon === 'file') { const p = await api.pickImage(); if (p) { S.icon = 'file'; S.iconPath = p; } } else S.icon = b.dataset.icon;
     sync();
@@ -320,50 +553,61 @@ function form(edit) {
     const target = S.type === 'web' ? $('#url', m).value.trim() : S.exe;
     if (!target) { (S.type === 'web' ? $('#url', m) : $('#pick', m)).focus(); return; }
     const ok = $('#ok', m); ok.disabled = true; ok.textContent = T('loading');
-    await api.saveApp({ id: edit?.id, type: S.type, name: nm.value, target, engine: S.engine, iconMode: S.icon, iconPath: S.iconPath });
+    await api.saveApp({ id: edit?.id, type: S.type, quick: !edit && S.type === 'exe' && S.dest === 'quick', name: nm.value, target, args: S.args, engine: S.engine, iconMode: S.icon, iconPath: S.iconPath });
     closeModal();
   };
   sync();
 }
 
-/* ---------- Einstellungen ---------- */
+/* ---------- Einstellungen: Kopfzeile mit den Reitern bleibt immer fest oben ---------- */
 const FS = [.85, 1, 1.15, 1.3, 1.5, 1.75];
 const tog = (b, label, get, set) => {
   const u = () => { b.textContent = `${label}: ${get() ? '✓' : '–'}`; b.classList.toggle('on', get()); };
   b.onclick = async () => { await set(!get()); u(); }; u();
 };
+const TABS = ['appearance', 'general', 'layout', 'quick', 'remote', 'power'];
+let setScroll = 0;
 function settings(tab = 'appearance') {
-  const tabs = ['appearance', 'general', 'layout', 'remote', 'power'];
   let body = '';
   if (tab === 'appearance') body = `<label>${esc(T('theme'))}</label><div class="seg">${themeSeg()}</div>
     <label>${esc(T('accent'))}</label><div class="swatches">${swatches()}</div>
     <label>${esc(T('lang'))}</label><div class="chips">${langChips()}</div>
     <label>${esc(T('wall'))}</label><div class="seg"><button class="btn" data-f id="wp">${esc(T('wallAdd'))}</button>${cfg.walls?.length ? `<button class="btn" data-f id="wc">${esc(T('wallDel'))}</button>` : ''}<button class="btn" data-f id="sl"></button><button class="btn" data-f id="dw"></button><button class="btn" data-f id="calm"></button></div>
+    <label>${esc(T('slideSec'))}</label><div class="seg">${[10, 20, 40, 60].map(v => `<button class="btn ${(cfg.slideSec || 20) === v ? 'on' : ''}" data-f data-ss="${v}">${v} s</button>`).join('')}</div>
     <label>${esc(T('fontSize'))}</label><div class="seg">${FS.map(v => `<button class="btn ${Math.abs((cfg.fontScale || 1) - v) < .01 ? 'on' : ''}" data-f data-fs="${v}">${Math.round(v * 100)}%</button>`).join('')}</div>`;
-  if (tab === 'layout') body = `<div class="hint">${esc(T('layoutHint'))}</div><div class="seg" style="margin-top:1.2rem"><button class="btn primary" data-f id="le">${esc(T('editLayout'))}</button><button class="btn" data-f id="la">${esc(T('addWidget'))}</button><button class="btn" data-f id="lr">${esc(T('resetLayout'))}</button></div>`;
+  if (tab === 'layout') body = `<div class="hint" style="margin-top:.3rem">${esc(T('layoutHint'))}</div><div class="seg" style="margin-top:1.2rem"><button class="btn primary" data-f id="le">${esc(T('editLayout'))}</button><button class="btn" data-f id="la">${esc(T('addWidget'))}</button><button class="btn" data-f id="lr">${esc(T('resetLayout'))}</button></div>`;
   if (tab === 'general') body = `<label>${esc(T('device'))}</label><input type="text" data-f id="dn" value="${esc(cfg.deviceName || '')}" maxlength="40">
     <label>${esc(T('city'))}</label><div class="line"><input type="text" data-f id="city" value="${esc(cfg.city || '')}"><button class="btn" data-f id="saveCity">${esc(T('apply'))}</button></div><div class="hint" id="cityMsg"></div>
-    <label>${esc(T('general'))}</label><div class="seg"><button class="btn" data-f id="auto"></button><button class="btn" data-f id="escc"></button><button class="btn" data-f id="snd"></button><button class="btn" data-f id="h24"></button><button class="btn" data-f id="fh"></button></div>`;
+    <label>${esc(T('general'))}</label><div class="seg"><button class="btn" data-f id="auto"></button><button class="btn" data-f id="escc"></button><button class="btn" data-f id="ctl"></button><button class="btn" data-f id="snd"></button><button class="btn" data-f id="h24"></button><button class="btn" data-f id="fh"></button></div>`;
+  if (tab === 'quick') body = `<div class="hint" style="margin:.3rem 0 1rem">${esc(T('quickHint'))}</div>${cfg.quick.map(a => `<div class="qrow"><i>${a.icon ? `<img src="${a.icon}" alt="">` : esc((a.name[0] || '?').toUpperCase())}</i><span>${esc(a.name)}</span><button class="btn" data-f data-qm="${a.id}:-1">←</button><button class="btn" data-f data-qm="${a.id}:1">→</button><button class="btn danger" data-f data-qd="${a.id}">${esc(T('remove'))}</button></div>`).join('')}<div class="actions" style="justify-content:flex-start;margin-top:1rem"><button class="btn primary" data-f id="qa">+ ${esc(T('quickAdd'))}</button></div>`;
   if (tab === 'remote') body = `<div class="remote"><img id="qr" alt="QR"><div><div class="hint" style="margin:0">${esc(T('remoteHint'))}</div><div id="pin"></div><div class="hint" id="rurl"></div><div class="hint" id="paired"></div></div></div>
     <div class="actions" style="justify-content:flex-start"><button class="btn" data-f id="unpair">${esc(T('unpair'))}</button></div>`;
-  if (tab === 'power') body = `<div class="seg" style="margin-top:1.2rem"><button class="btn" data-f data-pw="sleep">${esc(T('sleep'))}</button><button class="btn" data-f data-pw="restart">${esc(T('restart'))}</button><button class="btn danger" data-f data-pw="shutdown">${esc(T('shutdown'))}</button></div>
+  if (tab === 'power') body = `<div class="seg" style="margin-top:.4rem"><button class="btn" data-f data-pw="sleep">${esc(T('sleep'))}</button><button class="btn" data-f data-pw="restart">${esc(T('restart'))}</button><button class="btn danger" data-f data-pw="shutdown">${esc(T('shutdown'))}</button></div>
     <div class="actions" style="justify-content:flex-start"><button class="btn danger" data-f id="quit">${esc(T('quit'))}</button></div>`;
-  const m = modal('settings', `<h2>${esc(T('settings'))}</h2><div class="seg tabs">${tabs.map(t => `<button class="btn ${t === tab ? 'on' : ''}" data-f data-tab="${t}">${esc(T(t))}</button>`).join('')}</div>${body}
-    <div class="actions"><button class="btn primary" data-f id="done">${esc(T('done'))}</button></div>`, 'wide');
-  $$('[data-tab]', m).forEach(b => b.onclick = () => settings(b.dataset.tab));
+  const keep = modalId === 'settings' ? $('.sh-body', modalEl)?.scrollTop || 0 : 0;
+  const m = modal('settings', `<div class="sh-head"><h2>${esc(T('settings'))}</h2><div class="seg tabs">${TABS.map(t => `<button class="btn ${t === tab ? 'on' : ''}" data-f data-tab="${t}">${esc(T(t === 'quick' ? 'quick' : t))}</button>`).join('')}</div></div><div class="sh-body">${body}</div>
+    <div class="sh-foot"><button class="btn primary" data-f id="done">${esc(T('done'))}</button></div>`, 'wide settings');
+  if (keep) $('.sh-body', m).scrollTop = keep;
+  $$('[data-tab]', m).forEach(b => b.onclick = () => { if (b.dataset.tab !== tab) { settings(b.dataset.tab); refocus(`[data-tab="${b.dataset.tab}"]`); } });
   $('#done', m).onclick = closeModal;
   if (tab === 'appearance') {
-    bindLook(m, () => settings('appearance'));
+    bindLook(m, () => { settings('appearance'); });
     $('#wp', m).onclick = async () => { cfg.walls = await api.wallPick(); wallStart(); settings('appearance'); };
     if ($('#wc', m)) $('#wc', m).onclick = async () => { cfg.walls = await api.wallClear(); wallStart(); settings('appearance'); };
     tog($('#sl', m), T('slide'), () => cfg.slide, async v => { await save({ slide: v }); wallStart(); });
     tog($('#dw', m), T('defWalls'), () => cfg.wallDefaults !== false, async v => { await save({ wallDefaults: v }); wallStart(); });
-    tog($('#calm', m), T('calm'), () => cfg.calm, async v => { await save({ calm: v }); applyTheme(); });
+    tog($('#calm', m), T('calm'), () => cfg.calm, async v => { await save({ calm: v }); applyTheme(); wallStart(); });
+    $$('[data-ss]', m).forEach(b => b.onclick = async () => { await save({ slideSec: +b.dataset.ss }); wallStart(); settings('appearance'); refocus(`[data-ss="${b.dataset.ss}"]`); });
     $$('[data-fs]', m).forEach(b => b.onclick = async () => { await save({ fontScale: +b.dataset.fs }); applyTheme(); settings('appearance'); refocus(`[data-fs="${b.dataset.fs}"]`); });
   }
   if (tab === 'layout') {
     $('#le', m).onclick = enterEdit; $('#la', m).onclick = addWidgetModal;
     $('#lr', m).onclick = async () => { await save({ widgets: null }); renderZone(); closeModal(); };
+  }
+  if (tab === 'quick') {
+    $('#qa', m).onclick = () => form(null, 'quick');
+    $$('[data-qm]', m).forEach(b => b.onclick = async () => { const [id, d] = b.dataset.qm.split(':'); await api.moveApp(id, +d, true); setTimeout(() => settings('quick'), 80); });
+    $$('[data-qd]', m).forEach(b => b.onclick = async () => { await api.removeApp(b.dataset.qd, true); setTimeout(() => settings('quick'), 80); });
   }
   if (tab === 'general') {
     $('#dn', m).onchange = async e => { await save({ deviceName: e.target.value.trim() || cfg.deviceName }); applyLang(); };
@@ -377,6 +621,7 @@ function settings(tab = 'appearance') {
     };
     tog($('#auto', m), T('autostart'), () => cfg.autostart, async v => { cfg.autostart = v; await api.setConfig({ autostart: v }); });
     tog($('#escc', m), T('dblEsc'), () => cfg.escClose, v => save({ escClose: v }));
+    tog($('#ctl', m), T('ctrlL'), () => cfg.ctrlL !== false, v => save({ ctrlL: v }));
     tog($('#snd', m), T('sounds'), () => cfg.sounds, async v => { await save({ sounds: v }); blip(); });
     tog($('#h24', m), T('h24'), () => cfg.h24, async v => { await save({ h24: v }); tick(); });
     tog($('#fh', m), T('fahr'), () => cfg.fahr, async v => { await save({ fahr: v }); weather(); });
@@ -411,6 +656,7 @@ function move(dir) {
   best?.focus();
 }
 addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); api.menu(); return; }
   if (editing && !modalEl && editKey(e)) return;
   const inArea = e.target.tagName === 'TEXTAREA';
   if (inArea) {
@@ -424,13 +670,17 @@ addEventListener('keydown', e => {
     if (inInput && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     e.preventDefault(); move(e.key.slice(5));
   } else if (e.key === 'Enter') {
+    if (e.defaultPrevented) return;
     e.preventDefault(); inInput ? move('Down') : e.target.dataset?.f && e.target.click();
   } else if ((e.key === 'ContextMenu' || e.key === 'Delete') && !modalEl && e.target.dataset?.id) {
     e.preventDefault(); options(cfg.apps.find(a => a.id === e.target.dataset.id));
+  } else if ((e.key === 'ContextMenu' || e.key === 'Delete') && !modalEl && e.target.dataset?.q) {
+    e.preventDefault(); quickOptions(cfg.quick.find(a => a.id === e.target.dataset.q));
   }
 });
 document.addEventListener('focusin', e => {
   if (e.target.dataset?.f) blip(480);
+  if (e.target.closest?.('.dd')) e.target.scrollIntoView({ block: 'nearest' });
   const t = e.target.closest?.('.tile'); if (!t) return;
   const a = cfg.apps.find(x => x.id === t.dataset.id);
   a ? setBg(colorOf(a)) : setBg(...idleBg());
@@ -441,7 +691,7 @@ $('#row').addEventListener('mouseover', e => { const t = e.target.closest('.tile
 /* ---------- Maus: Glanz, Neigung und Tiefe der Kacheln folgen dem Zeiger ---------- */
 let mx = -1e4, my = -1e4, raf = 0, idleT;
 function parallax() {
-  raf = 0; const rs = document.documentElement.style; rs.setProperty('--mx', mx + 'px'); rs.setProperty('--my', my + 'px');
+  raf = 0;
   for (const c of $$('.tile .card')) {
     const b = c.getBoundingClientRect(), dx = (mx - (b.left + b.width / 2)) / b.width, dy = (my - (b.top + b.height / 2)) / b.height, k = Math.max(0, 1 - Math.hypot(dx, dy) / 3.2);
     c.style.setProperty('--rx', (-dy * 10 * k).toFixed(2) + 'deg'); c.style.setProperty('--ry', (dx * 12 * k).toFixed(2) + 'deg');
@@ -455,14 +705,18 @@ document.addEventListener('mouseleave', () => { mx = my = -1e4; if (!raf) raf = 
 wake();
 
 /* ---------- Start ---------- */
-api.on('apps', list => {
+api.on('apps', d => {
   const old = new Set(cfg.apps.map(a => a.id)), fid = document.activeElement?.dataset?.id;
-  cfg.apps = list; render();
-  const nw = list.find(a => !old.has(a.id)), target = nw ? nw.id : fid;
-  ($(`.tile[data-id="${target}"]`) || $('.tile'))?.focus();
+  cfg.apps = d.apps; cfg.quick = d.quick; cfg.running = d.running; render(); renderQuick();
+  if (modalId === 'settings' && $('.qrow, #qa', modalEl)) settings('quick');
+  const nw = d.apps.find(a => !old.has(a.id)), target = nw ? nw.id : fid;
+  if (!modalEl) ($(`.tile[data-id="${target}"]`) || $('.tile'))?.focus();
 });
+api.on('running', ids => { cfg.running = ids; render(); });
+api.on('launching', a => launching(a));
+api.on('home', () => { launchReset(); render(); setTimeout(() => { if (!modalEl) ($('.tile.add') && $$('.tile')[0])?.focus(); }, 60); });
 api.on('remote', d => { cfg.paired = d.paired; pill(); refreshRemote(); });
-$('#gear').onclick = () => settings(); $('#pill').onclick = () => settings('remote');
+$('#gear').onclick = () => settings(); $('#pill').onclick = () => settings('remote'); $('#wheel').onclick = () => api.menu();
 (async () => {
   cfg = await api.config();
   applyTheme(); applyLang(); wallStart(); setInterval(tick, 1000); setInterval(weather, 9e5);

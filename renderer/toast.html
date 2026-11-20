@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:transparent;color:#fff;font:500 16px/1.3 "Segoe UI Variable Text","Segoe UI",system-ui,"Noto Sans",sans-serif;-webkit-font-smoothing:antialiased}
+.p{margin:8px 10px;height:calc(100% - 16px);box-sizing:border-box;border-radius:32px;display:flex;align-items:center;gap:20px;padding:0 30px;opacity:0;
+ background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04)),rgba(22,24,32,.9);
+ box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),inset 0 1.5px 1px -.5px rgba(255,255,255,.65),inset 0 -1.5px 1px -.5px rgba(255,255,255,.2),0 14px 40px rgba(0,0,0,.45)}
+.keys{display:flex;gap:8px}.keys:empty{display:none}
+kbd{min-width:50px;height:42px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(#4d505c,#33353f);border-bottom:3px solid #1a1b21;font:600 15px "Segoe UI",sans-serif;padding:0 10px;box-sizing:border-box}
+.tx{min-width:0}
+b{display:block;font-size:19px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:480px}
+small{display:block;opacity:.66;font-size:14px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:480px}
+@keyframes io{0%{opacity:0;transform:translateY(-16px) scale(.97)}7%{opacity:1;transform:none}92%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-8px)}}
+</style></head>
+<body><div class="p" id="p"><div class="keys" id="keys"></div><div class="tx"><b id="t"></b><small id="s"></small></div></div>
+<script src="i18n.js"></script>
+<script>
+const p = document.getElementById('p');
+ovl.on('toast', d => {
+  document.documentElement.dir = I18N.dir(d.lang || 'en');
+  document.getElementById('t').textContent = d.t || '';
+  const s = document.getElementById('s'); s.textContent = d.s || ''; s.hidden = !d.s;
+  const k = document.getElementById('keys'); k.innerHTML = '';
+  (d.keys || []).forEach(x => { const e = document.createElement('kbd'); e.textContent = x; k.append(e); });
+  p.style.animation = 'none'; void p.offsetWidth; p.style.animation = `io ${d.ms || 5000}ms both`;
+});
+</script></body></html>

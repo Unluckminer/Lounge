@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;overflow:hidden;background:transparent;color:#fff;user-select:none;cursor:default;
+ font:500 15px/1.3 "Segoe UI Variable Text","Segoe UI",system-ui,"Noto Sans",sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+#root{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:14px;max-width:calc(100% - 20px);animation:up .38s cubic-bezier(.2,.9,.25,1) both}
+@keyframes up{from{opacity:0;transform:translate(-50%,24px) scale(.96)}}
+.glass{background:linear-gradient(160deg,rgba(255,255,255,.17),rgba(255,255,255,.04)),rgba(24,26,34,.9);
+ box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),inset 0 1.5px 1px -.5px rgba(255,255,255,.7),inset 0 -1.5px 1px -.5px rgba(255,255,255,.22),inset 0 0 22px rgba(255,255,255,.05),0 18px 50px rgba(0,0,0,.5)}
+#sub{border-radius:28px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;max-width:100%;animation:pop .25s cubic-bezier(.2,.9,.25,1) both}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.97)}}
+.subt{font-size:13px;opacity:.6;padding-left:6px}
+.chips{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-height:170px;overflow:auto}
+.chip{display:flex;align-items:center;gap:10px;padding:8px 16px 8px 8px;border-radius:99px;background:rgba(255,255,255,.1);font-size:15px;max-width:260px;transition:background .15s,transform .15s}
+.chip i{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:600;overflow:hidden;background:var(--c,#555);flex:none}
+.chip img{width:70%;height:70%;object-fit:contain}
+.chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip em{width:7px;height:7px;border-radius:50%;background:#fff;flex:none;font-size:0}
+.chip.sel,.chip:hover{background:#fff;color:#14161c;transform:scale(1.04)}
+.x{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.12);display:grid;place-items:center;font-size:17px;line-height:1;margin-left:-4px}
+.x:hover,.x.sel{background:#ff453a}
+.none{opacity:.6;padding:10px 14px}
+#dock{display:flex;gap:6px;padding:12px 14px;border-radius:40px}
+.it{width:96px;padding:10px 4px 9px;border-radius:30px;display:flex;flex-direction:column;align-items:center;gap:8px;transition:background .18s,color .18s,transform .22s cubic-bezier(.2,.9,.25,1)}
+.it svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.it span{font-size:13px;text-align:center;line-height:1.15;min-height:2.3em;display:flex;align-items:center}
+.it.sel,.it:hover{background:#fff;color:#14161c;transform:translateY(-4px) scale(1.06)}
+.it.danger.sel,.it.danger:hover{background:#ff453a;color:#fff}
+#foot{font-size:12.5px;opacity:.55;text-shadow:0 1px 8px #000}
+[hidden]{display:none!important}
+</style></head>
+<body>
+<div id="root"><div id="sub" class="glass" hidden><div class="subt" id="subt"></div><div class="chips" id="chips"></div></div>
+<div id="dock" class="glass"></div><div id="foot"></div></div>
+<script src="i18n.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const IC = {
+  home: '<path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5H9v5H5a1 1 0 0 1-1-1z"/>',
+  tasks: '<rect x="3.5" y="6" width="11" height="12" rx="2.5"/><path d="M18 8.5v8M21 10.5v4"/>',
+  fs: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  exitfs: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
+  split: '<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M12 5v14"/>',
+  unsplit: '<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M8 12h8"/>',
+  closeApp: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="m9 9 6 6M15 9l-6 6"/>',
+  power: '<path d="M12 3v8"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/>',
+};
+let d = null, T = k => k, items = [], sel = 0, open = null, subSel = 0, armed = false;
+const mono = a => `<i style="--c:${a.color ? `rgb(${a.color.join(',')})` : '#666'}">${a.icon ? `<img src="${a.icon}" alt="">` : (a.name[0] || '?').toUpperCase()}</i>`;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function build() {
+  T = k => I18N.t(d.lang, k); document.documentElement.dir = I18N.dir(d.lang);
+  items = [];
+  if (d.focused) items.push({ id: 'home', ic: 'home', l: T('mHome') });
+  if (d.tasks.length) items.push({ id: 'tasks', ic: 'tasks', l: T('mTasks'), sub: 'tasks' });
+  if (d.focused) {
+    if (d.split) items.push({ id: 'unsplit', ic: 'unsplit', l: T('mUnsplit') });
+    else { items.push({ id: 'full', ic: d.focused.full ? 'exitfs' : 'fs', l: d.focused.full ? T('mFullOff') : T('mFullOn') }); items.push({ id: 'split', ic: 'split', l: T('mSplit'), sub: 'split' }); }
+    items.push({ id: 'closeApp', ic: 'closeApp', l: T('mClose') });
+  }
+  items.push({ id: 'quit', ic: 'power', l: T('mQuit'), danger: true, sure: true });
+  sel = Math.min(sel, items.length - 1);
+  $('#foot').textContent = T('mHint');
+  paint();
+}
+function paint() {
+  $('#dock').innerHTML = items.map((x, i) => `<button class="it ${x.danger ? 'danger' : ''} ${!open && i === sel ? 'sel' : ''}" data-i="${i}"><svg viewBox="0 0 24 24">${IC[x.ic]}</svg><span>${esc(x.id === 'quit' && armed ? T('mSure') : x.l)}</span></button>`).join('');
+  const sub = $('#sub'); sub.hidden = !open;
+  if (open) {
+    const list = subList(); $('#subt').textContent = open === 'tasks' ? T('mTasks') : T('mSplitPick');
+    $('#chips').innerHTML = list.length ? list.map((c, i) => `<span style="display:flex;gap:6px;align-items:center"><button class="chip ${i === subSel ? 'sel' : ''}" data-c="${i}">${mono(c)}<span>${esc(c.name)}</span>${c.running || c.focused ? '<em>.</em>' : ''}</button>${open === 'tasks' ? `<button class="x" data-x="${i}">×</button>` : ''}</span>`).join('') : `<div class="none">${esc(T('mNone'))}</div>`;
+  }
+  document.querySelectorAll('.it').forEach(b => {
+    b.onclick = () => { sel = +b.dataset.i; activate(); };
+    b.onmousemove = () => { if (open || sel !== +b.dataset.i) { sel = +b.dataset.i; if (open && !items[sel].sub) open = null; paint(); } };
+  });
+  document.querySelectorAll('.chip').forEach(b => { b.onclick = () => { subSel = +b.dataset.c; pickSub(); }; });
+  document.querySelectorAll('.x').forEach(b => { b.onclick = () => ovl.act('closeTask', subList()[+b.dataset.x].id); });
+}
+const subList = () => open === 'tasks' ? d.tasks : d.apps.filter(a => !d.focused || a.name !== d.focused.name).sort((a, b) => (b.running - a.running));
+function activate() {
+  const x = items[sel]; if (!x) return;
+  if (x.sub) { open = open === x.sub ? null : x.sub; subSel = 0; armed = false; return paint(); }
+  if (x.sure) { if (!armed) { armed = true; paint(); setTimeout(() => { armed = false; paint(); }, 3000); return; } return ovl.act('quit'); }
+  ovl.act(x.id);
+}
+function pickSub() { const c = subList()[subSel]; if (!c) return; if (open === 'tasks') ovl.act('task', c.id); else ovl.act('split', c.id); }
+ovl.on('data', x => { d = x; build(); });
+addEventListener('keydown', e => {
+  const k = e.key;
+  if (k === 'Escape') { e.preventDefault(); if (open) { open = null; paint(); } else ovl.act('close'); return; }
+  if (open) {
+    const n = subList().length;
+    if (k === 'ArrowLeft' || k === 'ArrowUp') { e.preventDefault(); subSel = (subSel + n - 1) % Math.max(n, 1); paint(); }
+    else if (k === 'ArrowRight') { e.preventDefault(); subSel = (subSel + 1) % Math.max(n, 1); paint(); }
+    else if (k === 'ArrowDown') { e.preventDefault(); open = null; paint(); }
+    else if (k === 'Enter') { e.preventDefault(); pickSub(); }
+    else if ((k === 'Delete' || k === 'Backspace') && open === 'tasks') { e.preventDefault(); const c = subList()[subSel]; if (c) ovl.act('closeTask', c.id); }
+    return;
+  }
+  if (k === 'ArrowLeft') { e.preventDefault(); sel = (sel + items.length - 1) % items.length; armed = false; paint(); }
+  else if (k === 'ArrowRight' || k === 'Tab') { e.preventDefault(); sel = (sel + 1) % items.length; armed = false; paint(); }
+  else if (k === 'ArrowUp') { e.preventDefault(); if (items[sel].sub) { open = items[sel].sub; subSel = 0; paint(); } }
+  else if (k === 'Enter' || k === ' ') { e.preventDefault(); activate(); }
+});
+/* Klick neben das Menü schließt es */
+document.body.addEventListener('mousedown', e => { if (!e.target.closest('#dock,#sub')) ovl.act('close'); });
+</script></body></html>
