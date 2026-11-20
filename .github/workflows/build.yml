@@ -13,13 +13,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            script: dist:win
+            script: dist-win
             file: dist/Lounge-Windows.exe
           - os: macos-latest
-            script: dist:mac
+            script: dist-mac
             file: dist/Lounge-macOS.dmg
           - os: ubuntu-latest
-            script: dist:linux
+            script: dist-linux
             file: dist/Lounge-Linux.AppImage
     runs-on: ${{ matrix.os }}
     steps:
