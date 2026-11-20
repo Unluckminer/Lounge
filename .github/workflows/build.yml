@@ -14,12 +14,15 @@ jobs:
         include:
           - os: windows-latest
             script: dist:win
+            artifact: dist-win
             file: dist/Lounge-Windows.exe
           - os: macos-latest
             script: dist:mac
+            artifact: dist-mac
             file: dist/Lounge-macOS.dmg
           - os: ubuntu-latest
             script: dist:linux
+            artifact: dist-linux
             file: dist/Lounge-Linux.AppImage
     runs-on: ${{ matrix.os }}
     steps:
@@ -31,7 +34,7 @@ jobs:
       - run: npm run ${{ matrix.script }}
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.script }}
+          name: ${{ matrix.artifact }}
           path: ${{ matrix.file }}
 
   release:
