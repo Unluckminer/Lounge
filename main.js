@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeImage, screen, globalShortcut, shell, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, screen, globalShortcut, shell, Tray, Menu, safeStorage } = require('electron');
 const path = require('path'), fs = require('fs'), os = require('os'), http = require('http'), crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
@@ -23,12 +23,14 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const SCRIPTS = app.isPackaged ? path.join(process.resourcesPath, 'scripts') : path.join(__dirname, 'scripts');
 const KEYS = new Set(['Up','Down','Left','Right','Enter','Esc','Tab','Space','Backspace','Delete','Home','End','Apps','Win','F','F11','VolUp','VolDown','Mute','PlayPause','Next','Prev']);
 const newPin = () => String(crypto.randomInt(1000, 10000));
-const SETTINGS = ['city','lat','lon','escClose','deviceName','accent','theme','lang','onboarded','h24','fahr','sounds','calm','slide','slideSec','wallDefaults','fontScale','widgets','ctrlL'];
+const SETTINGS = ['cursorBig','cursorSize','shareActivity','city','lat','lon','escClose','deviceName','accent','theme','lang','onboarded','h24','fahr','sounds','calm','slide','slideSec','wallDefaults','fontScale','widgets','ctrlL'];
 const MENU_KEY = 'Control+L';
 
 let cfg = { apps: [], quick: [], city: '', lat: null, lon: null, escClose: true, tokens: [], deviceName: '', accent: '#0a84ff',
   theme: 'system', lang: '', onboarded: false, h24: true, fahr: false, sounds: false, calm: true, wall: null,
-  walls: [], slide: true, slideSec: 20, wallDefaults: true, fontScale: 1, widgets: null, ctrlL: true };
+  walls: [], slide: true, slideSec: 20, wallDefaults: true, fontScale: 1, widgets: null, ctrlL: true,
+  cursorBig: false, cursorSize: 2, shareActivity: true, layoutV: 0 };
+let ACC = null, UPD = null;
 let launcher = null, wss = null, lastEsc = 0, tray = null, menuWin = null, menuOpenedAt = 0;
 let remoteUrl = '', PIN = newPin(), psIn = null, psEsc = null, CFG_FILE, ICONS, DATA, WALLS;
 
@@ -48,6 +50,8 @@ function load() {
   if (cfg.wall) { if (fs.existsSync(cfg.wall) && !cfg.walls.includes(cfg.wall)) cfg.walls.push(cfg.wall); cfg.wall = null; }
   /* altes Widget-Format (nur Skalierung) wird durch das neue (freie Größe) ersetzt */
   if (Array.isArray(cfg.widgets) && cfg.widgets.some(w => w.w == null || w.h == null)) cfg.widgets = null;
+  /* Version 1.4: größerer Widget-Bereich, Uhr/Datum/Gruß einzeln -> altes Layout einmalig zurücksetzen */
+  if (cfg.layoutV !== 2) { cfg.widgets = null; cfg.layoutV = 2; }
   if (!cfg.lang) cfg.lang = I18N.pick(app.getLocale());
   if (!cfg.deviceName) cfg.deviceName = os.hostname();
 }
@@ -356,27 +360,49 @@ function menuData() {
     tasks: tasks.map(t => ({ id: t.id, name: t.name, color: t.app.color, icon: pub(t.app).icon, focused: t.id === focusId })),
     apps: cfg.apps.map(a => ({ ...pub(a), running: tasks.some(t => t.app.id === a.id) })) };
 }
-function toggleMenu() { if (menuWin && !menuWin.isDestroyed()) hideMenu(); else showMenu(); }
+let menuFocused = false, menuLast = 0;
+const MENU_NAV = { Up: 'ArrowUp', Down: 'ArrowDown', Left: 'ArrowLeft', Right: 'ArrowRight', Return: 'Enter', Escape: 'Escape', Backspace: 'Backspace', Delete: 'Delete' };
+function toggleMenu() {
+  /* Entprellen: Strg+L kann doppelt ankommen (Tastenwiederholung, Handy + Tastatur) */
+  const n = Date.now(); if (n - menuLast < 350) return; menuLast = n;
+  try { if (menuWin && !menuWin.isDestroyed()) hideMenu(); else showMenu(); } catch (e) { logErr(e); menuWin = null; unregNav(); }
+}
+/* Die Pfeil-/Enter-/Esc-Tasten werden, solange das Menü offen ist, global abgefangen und ans Menü weitergereicht.
+   So funktioniert die Bedienung auch dann, wenn Windows dem Menüfenster den Fokus nicht gibt (die andere App bleibt im Fokus). */
+function regNav() {
+  for (const k of Object.keys(MENU_NAV)) { try { globalShortcut.register(k, () => { if (menuWin && !menuWin.isDestroyed()) menuWin.webContents.send('key', MENU_NAV[k]); }); } catch {} }
+}
+function unregNav() { for (const k of Object.keys(MENU_NAV)) { try { globalShortcut.unregister(k); } catch {} } }
 function showMenu() {
   if (menuWin && !menuWin.isDestroyed()) return;
   hideToast();
   const b = screen.getPrimaryDisplay().bounds, w = Math.min(1180, b.width - 40), h = 420;
-  menuWin = new BrowserWindow({ x: Math.round(b.x + (b.width - w) / 2), y: b.y + b.height - h, width: w, height: h, transparent: true, frame: false, resizable: false,
+  menuFocused = false; menuOpenedAt = Date.now();
+  const win = menuWin = new BrowserWindow({ x: Math.round(b.x + (b.width - w) / 2), y: b.y + b.height - h, width: w, height: h, transparent: true, frame: false, resizable: false,
     skipTaskbar: true, hasShadow: false, alwaysOnTop: true, show: false, webPreferences: { preload: path.join(__dirname, 'preload.js') } });
-  menuWin.setAlwaysOnTop(true, 'screen-saver'); menuOpenedAt = Date.now();
-  menuWin.loadFile(path.join(__dirname, 'renderer', 'menu.html'));
-  menuWin.webContents.once('did-finish-load', () => { if (!menuWin || menuWin.isDestroyed()) return; menuWin.webContents.send('data', menuData()); menuWin.show(); menuWin.focus(); });
-  menuWin.on('blur', () => { if (Date.now() - menuOpenedAt > 600) hideMenu(); });
-  menuWin.on('closed', () => { menuWin = null; });
-  updateShortcut();
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.on('focus', () => { menuFocused = true; });
+  /* nur schließen, wenn das Fenster den Fokus wirklich hatte und ihn danach verliert (Klick auf eine andere App) */
+  win.on('blur', () => { if (menuFocused && Date.now() - menuOpenedAt > 600) hideMenu(); });
+  win.on('closed', () => { if (menuWin === win) { menuWin = null; unregNav(); } });
+  win.webContents.on('render-process-gone', () => { if (menuWin === win) hideMenu(); });
+  win.loadFile(path.join(__dirname, 'renderer', 'menu.html')).catch(e => logErr(e));
+  win.webContents.once('did-finish-load', () => {
+    if (win.isDestroyed()) return;
+    try { win.webContents.send('data', menuData()); win.showInactive(); win.moveTop(); win.focus(); } catch (e) { logErr(e); }
+  });
+  regNav(); updateShortcut();
 }
 function hideMenu(noRefocus) {
-  const w = menuWin; menuWin = null;
-  if (w && !w.isDestroyed()) w.destroy();
-  if (!noRefocus) { const f = focused(); if (f) raise(f); else if (launcher && launcher.isVisible()) launcher.focus(); }
+  const w = menuWin; menuWin = null; unregNav();
+  try { if (w && !w.isDestroyed()) w.destroy(); } catch (e) { logErr(e); }
+  if (!noRefocus) { try { const f = focused(); if (f) raise(f); else if (launcher && !launcher.isDestroyed() && launcher.isVisible()) launcher.focus(); } catch (e) { logErr(e); } }
   updateShortcut();
 }
 function menuAct(a, arg) {
+  try { menuAct2(a, arg); } catch (e) { logErr(e); }
+}
+function menuAct2(a, arg) {
   const f = focused();
   switch (a) {
     case 'close': hideMenu(); break;
@@ -392,11 +418,12 @@ function menuAct(a, arg) {
 }
 function updateShortcut() {
   try {
-    globalShortcut.unregister(MENU_KEY);
-    if (!cfg.ctrlL) return;
     const visible = launcher && !launcher.isDestroyed() && launcher.isVisible() && !launcher.isMinimized();
     /* Strg+L wird nur beansprucht, solange Lounge im Vordergrund ist oder eine Lounge-App läuft – so bleibt es in normalen Programmen (z. B. Adressleiste im Browser) frei */
-    if (visible || focused() || menuWin) globalShortcut.register(MENU_KEY, toggleMenu);
+    const want = cfg.ctrlL && (visible || focused() || menuWin);
+    const have = globalShortcut.isRegistered(MENU_KEY);
+    if (want && !have) globalShortcut.register(MENU_KEY, toggleMenu);
+    else if (!want && have) globalShortcut.unregister(MENU_KEY);
   } catch (e) { logErr(e); }
 }
 
@@ -556,7 +583,31 @@ function lanIp() {
 const stateMsg = () => { const f = focused(); return JSON.stringify({ t: 'state', mode: f ? f.app.type : 'launcher', name: f ? f.name : null,
   lang: cfg.lang, device: cfg.deviceName, accent: cfg.accent, theme: cfg.theme, tasks: tasks.length,
   apps: cfg.apps.map(a => ({ id: a.id, name: a.name, icon: a.icon ? '/icon/' + a.id + '?v=' + encodeURIComponent(path.basename(a.icon)) : null })) }); };
-function broadcast() { if (!wss) return; const s = stateMsg(); wss.clients.forEach(c => c.authed && c.readyState === 1 && c.send(s)); }
+/* Live-Status für Freunde: was gerade im Vordergrund läuft */
+function activityText() {
+  const f = focused(); if (!f) return null;
+  if (f.app.type === 'web') { try { return new URL(f.app.target).hostname.replace(/^www\./, ''); } catch {} }
+  return f.name;
+}
+const updatePresence = () => { try { ACC && ACC.setActivity(activityText(), cfg.shareActivity); } catch {} };
+
+/* Fernbedienungsmodus: sobald das Handy die Maus bewegt, gilt er für ~15 s. Dann (wenn aktiviert) großer Mauszeiger. */
+let remoteMouse = false, remoteMouseT = 0, cursorApplied = false;
+const cursorPx = () => Math.max(32, Math.min(256, Math.round(32 * (cfg.cursorSize || 2) / 16) * 16));
+function applyCursor() {
+  const on = !!cfg.cursorBig && remoteMouse;
+  send('remoteMode', { on, size: cfg.cursorSize || 2 });
+  if (WIN) {
+    if (on) { ps('cursor ' + cursorPx()); cursorApplied = true; }
+    else if (cursorApplied) { ps('cursor reset'); cursorApplied = false; }
+  }
+}
+function touchRemote() {
+  if (!remoteMouse) { remoteMouse = true; applyCursor(); }
+  clearTimeout(remoteMouseT); remoteMouseT = setTimeout(() => { remoteMouse = false; applyCursor(); }, 15000);
+}
+function broadcast() {
+  updatePresence(); if (!wss) return; const s = stateMsg(); wss.clients.forEach(c => c.authed && c.readyState === 1 && c.send(s)); }
 function startServer(port = 4747) {
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
@@ -596,9 +647,9 @@ function handle(m) {
     case 'key': if (KEYS.has(m.k)) input.key(m.k); break;
     case 'combo': if (m.k === 'alttab' || m.k === 'altf4') input.combo(m.k); break;
     case 'text': input.text(String(m.v).slice(0, 300)); break;
-    case 'move': input.move(m.dx | 0, m.dy | 0); break;
-    case 'click': input.click(m.b === 'r' ? 'r' : 'l'); break;
-    case 'scroll': input.scroll(m.d | 0); break;
+    case 'move': touchRemote(); input.move(m.dx | 0, m.dy | 0); break;
+    case 'click': touchRemote(); input.click(m.b === 'r' ? 'r' : 'l'); break;
+    case 'scroll': touchRemote(); input.scroll(m.d | 0); break;
     case 'back': if (menuWin) hideMenu(); else if (f && f.kind === 'site' && f.win && !f.win.isDestroyed()) goBack(f.win.webContents); else if (f && f.kind === 'browser') input.combo('altleft'); else input.key('Esc'); break;
     case 'home': goHome(); break;
     case 'close': if (f) closeTask(f); else goHome(); break;
@@ -615,12 +666,13 @@ const LOGIN = () => (process.env.PORTABLE_EXECUTABLE_FILE ? { path: process.env.
 ipcMain.handle('cfg:get', () => ({ apps: cfg.apps.map(pub), quick: cfg.quick.map(pub), running: running(), city: cfg.city, lat: cfg.lat, lon: cfg.lon, escClose: cfg.escClose,
   deviceName: cfg.deviceName, accent: cfg.accent, theme: cfg.theme, lang: cfg.lang, onboarded: cfg.onboarded, h24: cfg.h24,
   fahr: cfg.fahr, sounds: cfg.sounds, calm: cfg.calm, walls: wallUrls(), defWalls: defWalls(), slide: cfg.slide, slideSec: cfg.slideSec, wallDefaults: cfg.wallDefaults,
-  fontScale: cfg.fontScale, widgets: cfg.widgets, ctrlL: cfg.ctrlL, paired: cfg.tokens.length, platform: P,
+  fontScale: cfg.fontScale, widgets: cfg.widgets, ctrlL: cfg.ctrlL, cursorBig: cfg.cursorBig, cursorSize: cfg.cursorSize, shareActivity: cfg.shareActivity,
+  account: ACC ? ACC.state() : { configured: false }, version: app.getVersion(), update: UPD ? UPD.state() : null, paired: cfg.tokens.length, platform: P,
   autostart: app.getLoginItemSettings(LOGIN()).openAtLogin }));
 ipcMain.handle('cfg:set', (_, d) => {
   for (const k of SETTINGS) if (k in d) cfg[k] = d[k];
   if ('autostart' in d && app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!d.autostart, ...LOGIN() });
-  save(); broadcast(); if ('ctrlL' in d) updateShortcut();
+  save(); broadcast(); if ('ctrlL' in d) updateShortcut(); if ('cursorBig' in d || 'cursorSize' in d) applyCursor();
 });
 ipcMain.handle('apps:save', async (_, d) => {
   const list = d.quick ? cfg.quick : cfg.apps;
@@ -695,12 +747,42 @@ ipcMain.handle('sys:info', () => {
   return { cpu: Math.max(0, Math.min(1, load)), mem: 1 - os.freemem() / os.totalmem(), memTotal: os.totalmem(), up: os.uptime(), cores: cpus.length };
 });
 
+/* Konto, Freunde, News */
+const accWrap = fn => async (_, ...a) => { try { return await fn(...a); } catch (e) { logErr(e); return { error: 'err', detail: String((e && e.message) || e) }; } };
+ipcMain.handle('acc:state', () => ACC.state());
+ipcMain.handle('acc:signUp', accWrap(d => ACC.signUp(d)));
+ipcMain.handle('acc:signIn', accWrap(d => ACC.signIn(d)));
+ipcMain.handle('acc:google', accWrap(() => ACC.google()));
+ipcMain.handle('acc:username', accWrap(n => ACC.setUsername(n)));
+ipcMain.handle('acc:signOut', accWrap(() => ACC.signOut()));
+ipcMain.handle('acc:friends', accWrap(() => ACC.friends()));
+ipcMain.handle('acc:search', accWrap(q => ACC.search(q)));
+ipcMain.handle('acc:add', accWrap(n => ACC.add(n)));
+ipcMain.handle('acc:accept', accWrap(id => ACC.accept(id)));
+ipcMain.handle('acc:remove', accWrap(id => ACC.remove(id)));
+ipcMain.handle('news:list', accWrap(() => ACC.news()));
+ipcMain.handle('news:open', (_, id) => id);
+ipcMain.handle('update:state', () => UPD.state());
+ipcMain.handle('update:check', () => UPD.check());
+ipcMain.handle('update:install', () => UPD.install());
+
+let quitting = false;
+app.on('before-quit', e => {
+  if (quitting) return;
+  if (cursorApplied || (ACC && ACC.state().signedIn)) {
+    e.preventDefault(); quitting = true;
+    if (cursorApplied) { ps('cursor reset'); cursorApplied = false; }
+    Promise.race([ACC ? ACC.goOffline() : null, new Promise(r => setTimeout(r, 1500))]).catch(() => {}).finally(() => setTimeout(() => app.quit(), 450));
+  }
+});
 app.on('second-instance', () => { if (!focused()) showLauncher(); });
 app.on('will-quit', () => { try { globalShortcut.unregisterAll(); psIn && psIn.kill(); psEsc && psEsc.kill(); tasks.forEach(t => { t.dying = true; if (t.win && !t.win.isDestroyed()) t.win.destroy(); if (t.kill) t.kill(); else if (t.proc) killTree(t.proc); }); } catch {} });
 app.whenReady().then(() => {
   if (!gotLock) return;
   try {
-    load(); createLauncher(); startPS(); startServer(); updateShortcut();
+    load(); ACC = require('./account.js')({ app, shell, safeStorage, log: logErr, onChange: () => send('account', ACC.state()) });
+    UPD = require('./updater.js')({ app, shell, send, toast, T, log: logErr });
+    createLauncher(); startPS(); startServer(); updateShortcut(); ACC.init().catch(logErr); UPD.start();
     try {
       tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icon.png')).resize({ width: 18, height: 18 }));
       tray.setToolTip('Lounge'); tray.on('click', () => { goHome(); });

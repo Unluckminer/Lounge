@@ -23,27 +23,15 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public class W {
-  public delegate bool EnumProc(IntPtr h, IntPtr l);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
   [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hh, bool r);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p, IntPtr l);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr h);
-  public static IntPtr Find(uint pid) {
-    IntPtr found = IntPtr.Zero;
-    EnumWindows(delegate(IntPtr h, IntPtr l) {
-      uint p; GetWindowThreadProcessId(h, out p);
-      if (p == pid && IsWindowVisible(h) && GetWindowTextLength(h) > 0) { found = h; return false; }
-      return true;
-    }, IntPtr.Zero);
-    return found;
-  }
+  [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint a, uint b, IntPtr c, uint d);
 }
 "@
-
+function Find-Win([int]$id) { try { return (Get-Process -Id $id -ErrorAction Stop).MainWindowHandle } catch { return [IntPtr]::Zero } }
+$script:cur0 = $null
 $KEYS = @{
   Up=@(0x26,1); Down=@(0x28,1); Left=@(0x25,1); Right=@(0x27,1); Enter=@(0x0D,0); Esc=@(0x1B,0)
   Tab=@(0x09,0); Space=@(0x20,0); Backspace=@(0x08,0); Delete=@(0x2E,1); Home=@(0x24,1); End=@(0x23,1)
@@ -63,10 +51,18 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
   try {
     switch ($p[0]) {
       'key'    { Tap $p[1] }
-      'front'  { $h = [W]::Find([uint32]$p[1]); if ($h -ne [IntPtr]::Zero) { [W]::ShowWindow($h, 9) | Out-Null; [W]::SetForegroundWindow($h) | Out-Null } }
+      'cursor' {
+        # cursor <groesse> | cursor reset   (Windows: Mauszeigergroesse; wird beim Beenden zurueckgesetzt)
+        $k = 'HKCU:\Control Panel\Cursors'
+        if ($script:cur0 -eq $null) { $v0 = (Get-ItemProperty $k -ErrorAction SilentlyContinue).CursorBaseSize; if (-not $v0) { $v0 = 32 }; $script:cur0 = [int]$v0 }
+        $n = if ($p[1] -eq 'reset') { $script:cur0 } else { [int]$p[1] }
+        Set-ItemProperty $k -Name CursorBaseSize -Value $n -Type DWord
+        [W]::SystemParametersInfo(0x57, 0, [IntPtr]::Zero, 0) | Out-Null
+      }
+      'front'  { $h = Find-Win ([int]$p[1]); if ($h -ne [IntPtr]::Zero) { [W]::ShowWindow($h, 9) | Out-Null; [W]::SetForegroundWindow($h) | Out-Null } }
       'place'  {
         # place <pid> max   |   place <pid> rect <x> <y> <breite> <hoehe>   (Fenster eines laufenden Programms maximieren oder platzieren)
-        $h = [W]::Find([uint32]$p[1]); if ($h -eq [IntPtr]::Zero) { $h = [W]::GetForegroundWindow() }
+        $h = Find-Win ([int]$p[1]); if ($h -eq [IntPtr]::Zero) { $h = [W]::GetForegroundWindow() }
         $a = $p[2].Split(' ')
         if ($a[0] -eq 'max') { [W]::ShowWindow($h, 3) | Out-Null }
         elseif ($a[0] -eq 'rect') { [W]::ShowWindow($h, 9) | Out-Null; [W]::MoveWindow($h, [int]$a[1], [int]$a[2], [int]$a[3], [int]$a[4], $true) | Out-Null }

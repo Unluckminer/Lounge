@@ -1,0 +1,18 @@
+name: Supabase wach halten
+
+# Kostenlose Supabase-Projekte werden nach 7 Tagen ohne Aktivität pausiert.
+# Dieser Job ruft einmal täglich die News ab, damit das nicht passiert.
+# Einrichten: GitHub > Settings > Secrets and variables > Actions > New repository secret:
+#   SUPABASE_URL  (z. B. https://abcdxyz.supabase.co)   und   SUPABASE_ANON_KEY
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS "${{ secrets.SUPABASE_URL }}/rest/v1/news?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"

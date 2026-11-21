@@ -1,0 +1,8 @@
+[
+  { "id": 1, "tag": "Update", "title": "Neues Update 1.4 – What's New", "summary": "Accounts, Freunde, News-Ticker und frei platzierbare Uhr.",
+    "body": "Neu in Version 1.4:\n- Konto mit E-Mail oder Google\n- Freunde mit Live-Status\n- News-Ticker unten rechts\n- Uhr, Datum und Willkommensspruch einzeln verschiebbar\n- Flüssigere Animationen", "created_at": "2026-11-20T08:00:00Z" },
+  { "id": 2, "tag": "Tipp", "title": "Strg + L öffnet das Menü", "summary": "Das Overlay-Menü liegt über jeder Lounge-App.",
+    "body": "Drück Strg + L, um zurück zu Lounge zu springen, das Vollbild zu beenden, Splitscreen zu starten oder Lounge zu schließen.", "created_at": "2026-11-19T08:00:00Z" },
+  { "id": 3, "tag": "Tipp", "title": "Widgets frei anordnen", "summary": "Einstellungen > Layout > Layout bearbeiten.",
+    "body": "Im Layout-Modus kannst du jedes Widget – auch Uhr, Datum und Willkommensspruch – verschieben und an allen Ecken und Kanten in der Größe ändern.", "created_at": "2026-11-18T08:00:00Z" }
+]

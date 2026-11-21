@@ -24,7 +24,7 @@ function applyLang() {
   const r = document.documentElement; r.lang = cfg.lang; r.dir = I18N.dir(cfg.lang);
   $$('[data-i]').forEach(e => { e.textContent = T(e.dataset.i); });
   $('#gear').setAttribute('aria-label', T('settings')); $('#wheel').setAttribute('aria-label', T('wheel'));
-  $('#dev span').textContent = cfg.deviceName || '';
+  renderProfile(); $('#friendsBtn .bd').hidden = !(FR && FR.incoming && FR.incoming.length);
   $('#editHint').textContent = T('editHint'); $('#eAdd').textContent = '+ ' + T('addWidget'); $('#eReset').textContent = T('resetLayout'); $('#eDone').textContent = T('done');
   renderZone(); weather(); render(); renderQuick(); pill();
 }
@@ -74,20 +74,23 @@ function wallStart() {
 /* ---------- Widgets (alle weiß, Größe frei veränderbar) ---------- */
 /* w/h = Größe in Prozent der Bildschirmbreite/-höhe, rw/rh = Bezugsgröße in px, nach der sich der Inhalt mitskaliert */
 const WT = {
-  clock:     { w: 30, h: 22, rw: 430, rh: 215, k: 'wClock' },
-  weather:   { w: 16, h: 25, rw: 250, rh: 265, k: 'wWeather' },
-  forecast:  { w: 29, h: 18, rw: 440, rh: 195, k: 'wForecast' },
-  calendar:  { w: 18, h: 36, rw: 280, rh: 330, k: 'wCal' },
-  note:      { w: 17, h: 27, rw: 250, rh: 270, k: 'wNote' },
-  todo:      { w: 17, h: 32, rw: 250, rh: 300, k: 'wTodo' },
-  timer:     { w: 17, h: 29, rw: 250, rh: 260, k: 'wTimer' },
-  world:     { w: 13, h: 18, rw: 200, rh: 170, k: 'wWorld' },
-  system:    { w: 16, h: 24, rw: 245, rh: 250, k: 'wSystem' },
-  countdown: { w: 15, h: 24, rw: 225, rh: 235, k: 'wCountdown' },
+  greet:     { w: 28, h: 9,  rw: 400, rh: 64,  k: 'wGreet', plain: true },
+  time:      { w: 28, h: 26, rw: 400, rh: 200, k: 'wTime', plain: true },
+  date:      { w: 28, h: 9,  rw: 400, rh: 56,  k: 'wDate', plain: true },
+  weather:   { w: 17, h: 33, rw: 250, rh: 265, k: 'wWeather' },
+  forecast:  { w: 30, h: 26, rw: 440, rh: 195, k: 'wForecast' },
+  calendar:  { w: 18, h: 48, rw: 280, rh: 330, k: 'wCal' },
+  note:      { w: 17, h: 38, rw: 250, rh: 270, k: 'wNote' },
+  todo:      { w: 17, h: 44, rw: 250, rh: 300, k: 'wTodo' },
+  timer:     { w: 17, h: 40, rw: 250, rh: 260, k: 'wTimer' },
+  world:     { w: 13, h: 25, rw: 200, rh: 170, k: 'wWorld' },
+  system:    { w: 16, h: 34, rw: 245, rh: 250, k: 'wSystem' },
+  countdown: { w: 15, h: 33, rw: 225, rh: 235, k: 'wCountdown' },
 };
 const defaultWidgets = () => [
-  { id: 'clock', type: 'clock', x: 3, y: 12, w: 30, h: 22 }, { id: 'weather', type: 'weather', x: 80, y: 12, w: 16, h: 25 },
-  { id: 'calendar', type: 'calendar', x: 61, y: 12, w: 18, h: 36 },
+  { id: 'greet', type: 'greet', x: 3, y: 4, w: 28, h: 9 }, { id: 'time', type: 'time', x: 3, y: 13, w: 28, h: 26 }, { id: 'date', type: 'date', x: 3, y: 39, w: 28, h: 9 },
+  { id: 'forecast', type: 'forecast', x: 3, y: 56, w: 30, h: 24 },
+  { id: 'weather', type: 'weather', x: 60, y: 11, w: 17, h: 33 }, { id: 'calendar', type: 'calendar', x: 79, y: 11, w: 18, h: 46 },
 ];
 const widgets = () => cfg.widgets || defaultWidgets();
 const wById = id => widgets().find(w => w.id === id);
@@ -98,7 +101,7 @@ const RT = {};   // Laufzeitdaten (Timer usw.)
 const ro = new ResizeObserver(es => es.forEach(e => { const el = e.target, t = WT[el.dataset.type]; if (!t) return; el.style.setProperty('--u', clamp(Math.min(e.contentRect.width / t.rw, e.contentRect.height / t.rh), .45, 6).toFixed(3)); }));
 function place(el, w) { el.style.left = w.x + '%'; el.style.top = w.y + '%'; el.style.width = w.w + '%'; el.style.height = w.h + '%'; }
 function fit(el, w) {
-  w.w = clamp(w.w, 6, 100); w.h = clamp(w.h, 7, 100);
+  w.w = clamp(w.w, 4, 100); w.h = clamp(w.h, 4, 100);
   w.x = clamp(w.x, 0, 100 - w.w); w.y = clamp(w.y, 0, 100 - w.h); place(el, w);
 }
 const ICO = {
@@ -117,7 +120,9 @@ const wmo = c => c === 0 ? ['wx0', 'sun'] : c <= 2 ? ['wx1', 'part'] : c === 3 ?
 
 function widgetBody(w) {
   switch (w.type) {
-    case 'clock': return '<div class="wi"><div class="w-greet"></div><div class="w-clock"></div><div class="w-date"></div></div>';
+    case 'greet': return '<div class="wi tx"><div class="w-greet"></div></div>';
+    case 'time': return '<div class="wi tx"><div class="w-clock"></div></div>';
+    case 'date': return '<div class="wi tx"><div class="w-date"></div></div>';
     case 'weather': return '<div class="wi wx wxb"></div>';
     case 'forecast': return '<div class="wi fcb"></div>';
     case 'calendar': return '<div class="wi calb"></div>';
@@ -135,8 +140,8 @@ function renderZone() {
   for (const w of widgets()) {
     if (!WT[w.type]) continue;
     const el = document.createElement('div');
-    el.className = 'wd wd-' + w.type + (w.type === 'clock' ? '' : ' glass'); el.dataset.wid = w.id; el.dataset.type = w.type; place(el, w);
-    el.innerHTML = widgetBody(w) + '<button class="wd-x" tabindex="-1" aria-label="×">×</button><i class="wd-rs"></i>';
+    el.className = 'wd wd-' + w.type + (WT[w.type].plain ? ' plain' : ' glass'); el.dataset.wid = w.id; el.dataset.type = w.type; place(el, w);
+    el.innerHTML = widgetBody(w) + '<button class="wd-x" tabindex="-1" aria-label="×">×</button>' + ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(d => `<i class="hd hd-${d}" data-h="${d}"></i>`).join('');
     if (editing) { el.tabIndex = 0; $$('textarea,input', el).forEach(t => { t.tabIndex = -1; }); }
     if (w.id === selW) el.classList.add('sel');
     const ta = $('textarea', el); if (ta) ta.oninput = () => { w.text = ta.value; commitSoon(); };
@@ -296,14 +301,24 @@ $('#zone').addEventListener('pointerdown', e => {
   const w = wById(el.dataset.wid); if (!w) return;
   if (e.target.closest('.wd-x')) { e.preventDefault(); removeWidget(w.id); return; }
   select(w.id);
-  drag = { el, w, rs: !!e.target.closest('.wd-rs'), sx: e.clientX, sy: e.clientY, x0: w.x, y0: w.y, w0: w.w, h0: w.h, zr: $('#zone').getBoundingClientRect() };
+  drag = { el, w, h: e.target.closest('.hd')?.dataset.h || '', sx: e.clientX, sy: e.clientY, x0: w.x, y0: w.y, w0: w.w, h0: w.h, zr: $('#zone').getBoundingClientRect() };
   el.setPointerCapture(e.pointerId); el.focus(); e.preventDefault();
 });
 $('#zone').addEventListener('pointermove', e => {
-  if (!drag) return; const d = drag, dx = (e.clientX - d.sx) / d.zr.width * 100, dy = (e.clientY - d.sy) / d.zr.height * 100, sn = v => Math.round(v * 2) / 2;
-  if (d.rs) { d.w.w = sn(d.w0 + dx); d.w.h = sn(d.h0 + dy); if (d.w.x + d.w.w > 100) d.w.w = 100 - d.w.x; if (d.w.y + d.w.h > 100) d.w.h = 100 - d.w.y; }
-  else { d.w.x = sn(d.x0 + dx); d.w.y = sn(d.y0 + dy); }
-  fit(d.el, d.w);
+  if (!drag) return; const d = drag, dx = (e.clientX - d.sx) / d.zr.width * 100, dy = (e.clientY - d.sy) / d.zr.height * 100, sn = v => Math.round(v * 2) / 2, w = d.w, MIN = 4;
+  if (d.h) {
+    let x = d.x0, y = d.y0, ww = d.w0, hh = d.h0;
+    if (d.h.includes('e')) ww = d.w0 + dx;
+    if (d.h.includes('s')) hh = d.h0 + dy;
+    if (d.h.includes('w')) { ww = d.w0 - dx; x = d.x0 + dx; }
+    if (d.h.includes('n')) { hh = d.h0 - dy; y = d.y0 + dy; }
+    if (ww < MIN) { if (d.h.includes('w')) x = d.x0 + d.w0 - MIN; ww = MIN; }
+    if (hh < MIN) { if (d.h.includes('n')) y = d.y0 + d.h0 - MIN; hh = MIN; }
+    if (x < 0) { ww += x; x = 0; } if (y < 0) { hh += y; y = 0; }
+    if (x + ww > 100) ww = 100 - x; if (y + hh > 100) hh = 100 - y;
+    w.x = sn(x); w.y = sn(y); w.w = sn(ww); w.h = sn(hh);
+  } else { w.x = sn(d.x0 + dx); w.y = sn(d.y0 + dy); }
+  fit(d.el, w);
 });
 const endDrag = () => { if (drag) { drag = null; commit(); } };
 $('#zone').addEventListener('pointerup', endDrag); $('#zone').addEventListener('pointercancel', endDrag);
@@ -407,7 +422,17 @@ function render() {
   add.className = 'tile add'; add.dataset.f = 1;
   add.innerHTML = `<div class="card">+</div><div class="name">${esc(T('add'))}</div>`;
   add.onclick = () => form(); row.append(add);
+  requestAnimationFrame(() => centerTile(document.activeElement?.closest?.('.tile') || row.firstElementChild, true));
 }
+/* Die Reihe wird per GPU-Transform verschoben (statt scrollIntoView): kein Ruckeln, immer dieselbe weiche Kurve */
+function centerTile(t, instant) {
+  const wrap = $('#rowwrap'), row = $('#row'); if (!t || !wrap) return;
+  const cw = wrap.clientWidth, rw = row.scrollWidth, mid = t.offsetLeft + t.offsetWidth / 2;
+  const tx = rw <= cw ? (cw - rw) / 2 : -Math.min(Math.max(mid - cw / 2, 0), rw - cw);
+  if (instant) { row.style.transition = 'none'; row.style.transform = `translate3d(${tx}px,0,0)`; void row.offsetWidth; row.style.transition = ''; }
+  else row.style.transform = `translate3d(${tx}px,0,0)`;
+}
+addEventListener('resize', () => centerTile(document.activeElement?.closest?.('.tile') || $('.tile'), true));
 function pill() { $('#pill').hidden = cfg.paired > 0; }
 function blip(f = 520) {
   if (!cfg.sounds && f < 800) return;
@@ -434,7 +459,7 @@ function modal(id, html, cls = '') {
   if (modalEl && modalId === id) { const s = $('.sheet', modalEl); s.innerHTML = html; s.className = 'sheet glass ' + cls; $('[data-f]:not([hidden])', modalEl)?.focus(); return modalEl; }
   closeModal(); prevFocus = document.activeElement; modalId = id;
   const m = modalEl = document.createElement('div');
-  m.className = 'modal'; m.innerHTML = `<div class="sheet glass ${cls}">${html}</div>`;
+  m.className = 'modal' + (id === 'welcome' ? ' dim' : ''); m.innerHTML = `<div class="sheet glass ${cls}">${html}</div>`;
   document.body.append(m);
   m.addEventListener('mousedown', e => { if (e.target === m && id !== 'welcome') closeModal(); });
   requestAnimationFrame(() => { m.classList.add('open'); $('[data-f]:not([hidden])', m)?.focus(); });
@@ -458,20 +483,22 @@ const refocus = sel => requestAnimationFrame(() => $(sel, modalEl)?.focus());
 
 /* ---------- Willkommen ---------- */
 function welcome(step = 0) {
-  const dots = `<div class="dots">${[0, 1, 2, 3].map(i => `<i class="${i === step ? 'on' : ''}"></i>`).join('')}</div>`;
+  const dots = `<div class="dots">${[0, 1, 2, 3, 4].map(i => `<i class="${i === step ? 'on' : ''}"></i>`).join('')}</div>`;
   const nav = (back, label = T('next')) => `<div class="actions">${back ? `<button class="btn" data-f id="wb">${esc(T('back'))}</button>` : ''}<button class="btn primary" data-f id="wn">${esc(label)}</button></div>`;
   let h;
   if (step === 0) h = `${dots}<h1>${esc(T('welcome'))}</h1><p class="sub">${esc(T('wSub'))}</p><div class="chips">${langChips()}</div>${nav(false)}`;
   if (step === 1) h = `${dots}<h2>${esc(T('device'))}</h2><input type="text" data-f id="dn" value="${esc(cfg.deviceName || '')}" maxlength="40"><div class="hint">${esc(T('devHint'))}</div>${nav(true)}`;
   if (step === 2) h = `${dots}<h2>${esc(T('appearance'))}</h2><label>${esc(T('theme'))}</label><div class="seg">${themeSeg()}</div><label>${esc(T('accent'))}</label><div class="swatches">${swatches()}</div>${nav(true)}`;
-  if (step === 3) h = `${dots}<div class="check"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><h1>${esc(T('done'))}</h1><p class="sub">${esc(cfg.deviceName)}</p>${nav(true, T('start'))}`;
+  if (step === 3) h = `${dots}<h2>${esc(T('accCreate'))}</h2><div id="acct"></div><div class="actions"><button class="btn" data-f id="wb">${esc(T('back'))}</button><button class="btn ${acc().signedIn ? 'primary' : ''}" data-f id="wn">${esc(T(acc().signedIn ? 'next' : 'accSkip'))}</button></div>`;
+  if (step === 4) h = `${dots}<div class="check"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><h1>${esc(T('done'))}</h1><p class="sub">${esc(acc().username || cfg.deviceName)}</p>${nav(true, T('start'))}`;
   const m = modal('welcome', h, 'wide');
   bindLook(m, () => welcome(step));
   if (step === 0) refocus('#wn');
   $('#wb', m) && ($('#wb', m).onclick = () => welcome(step - 1));
+  if (step === 3) mountAccount($('#acct', m), { onSuccess: () => welcome(4) });
   $('#wn', m).onclick = async () => {
     if (step === 1) await save({ deviceName: $('#dn', m).value.trim() || cfg.deviceName });
-    if (step === 3) { await save({ onboarded: true }); applyLang(); closeModal(); $('.tile')?.focus(); return; }
+    if (step === 4) { await save({ onboarded: true }); applyLang(); closeModal(); $('.tile')?.focus(); return; }
     welcome(step + 1);
   };
 }
@@ -578,10 +605,13 @@ function settings(tab = 'appearance') {
   if (tab === 'layout') body = `<div class="hint" style="margin-top:.3rem">${esc(T('layoutHint'))}</div><div class="seg" style="margin-top:1.2rem"><button class="btn primary" data-f id="le">${esc(T('editLayout'))}</button><button class="btn" data-f id="la">${esc(T('addWidget'))}</button><button class="btn" data-f id="lr">${esc(T('resetLayout'))}</button></div>`;
   if (tab === 'general') body = `<label>${esc(T('device'))}</label><input type="text" data-f id="dn" value="${esc(cfg.deviceName || '')}" maxlength="40">
     <label>${esc(T('city'))}</label><div class="line"><input type="text" data-f id="city" value="${esc(cfg.city || '')}"><button class="btn" data-f id="saveCity">${esc(T('apply'))}</button></div><div class="hint" id="cityMsg"></div>
-    <label>${esc(T('general'))}</label><div class="seg"><button class="btn" data-f id="auto"></button><button class="btn" data-f id="escc"></button><button class="btn" data-f id="ctl"></button><button class="btn" data-f id="snd"></button><button class="btn" data-f id="h24"></button><button class="btn" data-f id="fh"></button></div>`;
+    <label>${esc(T('general'))}</label><div class="seg"><button class="btn" data-f id="auto"></button><button class="btn" data-f id="escc"></button><button class="btn" data-f id="ctl"></button><button class="btn" data-f id="snd"></button><button class="btn" data-f id="h24"></button><button class="btn" data-f id="fh"></button><button class="btn" data-f id="shr"></button></div>
+    <label>${esc(T('updates'))}: v${esc(cfg.version || '')}</label><div class="line"><button class="btn" data-f id="updchk">${esc(T('updCheck'))}</button>${UPDS.state === 'ready' || UPDS.state === 'manual' ? `<button class="btn primary" data-f id="updgo">${esc(UPDS.state === 'ready' ? T('updRestart') : T('updGet'))}</button>` : ''}</div><div class="hint" id="updline">${esc(updText(UPDS))}</div>`;
   if (tab === 'quick') body = `<div class="hint" style="margin:.3rem 0 1rem">${esc(T('quickHint'))}</div>${cfg.quick.map(a => `<div class="qrow"><i>${a.icon ? `<img src="${a.icon}" alt="">` : esc((a.name[0] || '?').toUpperCase())}</i><span>${esc(a.name)}</span><button class="btn" data-f data-qm="${a.id}:-1">←</button><button class="btn" data-f data-qm="${a.id}:1">→</button><button class="btn danger" data-f data-qd="${a.id}">${esc(T('remove'))}</button></div>`).join('')}<div class="actions" style="justify-content:flex-start;margin-top:1rem"><button class="btn primary" data-f id="qa">+ ${esc(T('quickAdd'))}</button></div>`;
   if (tab === 'remote') body = `<div class="remote"><img id="qr" alt="QR"><div><div class="hint" style="margin:0">${esc(T('remoteHint'))}</div><div id="pin"></div><div class="hint" id="rurl"></div><div class="hint" id="paired"></div></div></div>
-    <div class="actions" style="justify-content:flex-start"><button class="btn" data-f id="unpair">${esc(T('unpair'))}</button></div>`;
+    <div class="actions" style="justify-content:flex-start;margin-top:1rem"><button class="btn" data-f id="unpair">${esc(T('unpair'))}</button></div>
+    <label style="margin-top:1.6rem">${esc(T('curBig'))}</label><div class="seg"><button class="btn" data-f id="cb"></button></div>
+    <label>${esc(T('curSize'))}: <b id="csv"></b></label><div class="slider"><input type="range" data-f id="cs" min="1" max="5" step="0.25" value="${cfg.cursorSize || 2}"><div id="cprev"></div></div><div class="hint">${esc(T('curNote'))}</div>`;
   if (tab === 'power') body = `<div class="seg" style="margin-top:.4rem"><button class="btn" data-f data-pw="sleep">${esc(T('sleep'))}</button><button class="btn" data-f data-pw="restart">${esc(T('restart'))}</button><button class="btn danger" data-f data-pw="shutdown">${esc(T('shutdown'))}</button></div>
     <div class="actions" style="justify-content:flex-start"><button class="btn danger" data-f id="quit">${esc(T('quit'))}</button></div>`;
   const keep = modalId === 'settings' ? $('.sh-body', modalEl)?.scrollTop || 0 : 0;
@@ -625,8 +655,16 @@ function settings(tab = 'appearance') {
     tog($('#snd', m), T('sounds'), () => cfg.sounds, async v => { await save({ sounds: v }); blip(); });
     tog($('#h24', m), T('h24'), () => cfg.h24, async v => { await save({ h24: v }); tick(); });
     tog($('#fh', m), T('fahr'), () => cfg.fahr, async v => { await save({ fahr: v }); weather(); });
+    $('#updchk', m).onclick = async () => { $('#updline').textContent = T('updChecking'); UPDS = await api.update.check() || UPDS; paintUpd(); };
+    if ($('#updgo', m)) $('#updgo', m).onclick = () => api.update.install();
+    tog($('#shr', m), T('accShare'), () => cfg.shareActivity !== false, v => save({ shareActivity: v }));
   }
-  if (tab === 'remote') { $('#unpair', m).onclick = () => api.unpair(); refreshRemote(); }
+  if (tab === 'remote') {
+    $('#unpair', m).onclick = () => api.unpair(); refreshRemote();
+    tog($('#cb', m), T('curBigShort'), () => !!cfg.cursorBig, v => save({ cursorBig: v }));
+    const cs = $('#cs', m), prev = () => { $('#csv', m).textContent = '×' + (+cs.value).toFixed(2).replace(/0$/, ''); $('#cprev', m).innerHTML = arrowSvg(+cs.value); };
+    prev(); cs.oninput = prev; cs.onchange = () => save({ cursorSize: +cs.value });
+  }
   if (tab === 'power') {
     $$('[data-pw]', m).forEach(b => { let armed = 0, label = b.textContent; b.onclick = () => {
       if (!armed) { armed = 1; b.textContent = T('confirm'); setTimeout(() => { armed = 0; b.textContent = label; }, 3000); } else api.power(b.dataset.pw); }; });
@@ -656,7 +694,7 @@ function move(dir) {
   best?.focus();
 }
 addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); api.menu(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); return; }   // Strg+L wird global vom Hauptprozess behandelt
   if (editing && !modalEl && editKey(e)) return;
   const inArea = e.target.tagName === 'TEXTAREA';
   if (inArea) {
@@ -671,7 +709,7 @@ addEventListener('keydown', e => {
     e.preventDefault(); move(e.key.slice(5));
   } else if (e.key === 'Enter') {
     if (e.defaultPrevented) return;
-    e.preventDefault(); inInput ? move('Down') : e.target.dataset?.f && e.target.click();
+    e.preventDefault(); inInput ? (e.target.dataset.submit ? $(e.target.dataset.submit)?.click() : move('Down')) : e.target.dataset?.f && e.target.click();
   } else if ((e.key === 'ContextMenu' || e.key === 'Delete') && !modalEl && e.target.dataset?.id) {
     e.preventDefault(); options(cfg.apps.find(a => a.id === e.target.dataset.id));
   } else if ((e.key === 'ContextMenu' || e.key === 'Delete') && !modalEl && e.target.dataset?.q) {
@@ -684,16 +722,18 @@ document.addEventListener('focusin', e => {
   const t = e.target.closest?.('.tile'); if (!t) return;
   const a = cfg.apps.find(x => x.id === t.dataset.id);
   a ? setBg(colorOf(a)) : setBg(...idleBg());
-  t.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  if (!mouseFocus) centerTile(t);
 });
-$('#row').addEventListener('mouseover', e => { const t = e.target.closest('.tile'); if (t && document.activeElement !== t && !modalEl && !editing) t.focus({ preventScroll: true }); });
+let mouseFocus = false;
+$('#row').addEventListener('mouseover', e => { const t = e.target.closest('.tile'); if (t && document.activeElement !== t && !modalEl && !editing) { mouseFocus = true; t.focus({ preventScroll: true }); mouseFocus = false; } });
 
 /* ---------- Maus: Glanz, Neigung und Tiefe der Kacheln folgen dem Zeiger ---------- */
 let mx = -1e4, my = -1e4, raf = 0, idleT;
 function parallax() {
   raf = 0;
   for (const c of $$('.tile .card')) {
-    const b = c.getBoundingClientRect(), dx = (mx - (b.left + b.width / 2)) / b.width, dy = (my - (b.top + b.height / 2)) / b.height, k = Math.max(0, 1 - Math.hypot(dx, dy) / 3.2);
+    const b = c.getBoundingClientRect(); if (b.right < -60 || b.left > innerWidth + 60) continue;
+    const dx = (mx - (b.left + b.width / 2)) / b.width, dy = (my - (b.top + b.height / 2)) / b.height, k = Math.max(0, 1 - Math.hypot(dx, dy) / 3.2);
     c.style.setProperty('--rx', (-dy * 10 * k).toFixed(2) + 'deg'); c.style.setProperty('--ry', (dx * 12 * k).toFixed(2) + 'deg');
     c.style.setProperty('--ix', (dx * 14 * k).toFixed(1) + 'px'); c.style.setProperty('--iy', (dy * 10 * k).toFixed(1) + 'px');
     c.style.setProperty('--hx', (50 + dx * 45).toFixed(0) + '%'); c.style.setProperty('--hy', (50 + dy * 45).toFixed(0) + '%');
@@ -703,6 +743,164 @@ const wake = () => { document.body.classList.remove('idle'); clearTimeout(idleT)
 addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; wake(); if (!raf) raf = requestAnimationFrame(parallax); });
 document.addEventListener('mouseleave', () => { mx = my = -1e4; if (!raf) raf = requestAnimationFrame(parallax); });
 wake();
+
+
+/* ---------- Konto ---------- */
+const acc = () => cfg.account || { configured: false };
+const personSvg = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></svg>';
+function renderProfile() {
+  const d = $('#dev'), a = acc();
+  d.innerHTML = `<i class="av">${a.signedIn && a.username ? esc(a.username[0].toUpperCase()) : personSvg}</i><span>${esc(a.signedIn ? (a.username || T('accChoose')) : T('accGuest'))}</span>`;
+}
+const ERR = { nobackend: 'accNoBackend', badname: 'accBad', taken: 'accTaken', short: 'accShort', exists: 'accExists', wrong: 'accWrong', unconfirmed: 'accUnconf', timeout: 'accTimeout', err: 'accErr' };
+const errMsg = r => T(ERR[r.error] || 'accErr') + (r.error === 'err' && r.detail ? ' (' + r.detail + ')' : '');
+function mountAccount(host, o) {
+  let mode = acc().needsUsername ? 'name' : 'register', msg = '', busy = false;
+  const paint = () => {
+    const a = acc();
+    if (!a.configured) { host.innerHTML = `<p class="hint" style="font-size:1.15rem">${esc(T('accNoBackend'))}</p>`; return; }
+    if (a.signedIn && a.username) { host.innerHTML = `<p class="sub" style="margin:.4rem 0">${esc(T('accHi'))} <b>${esc(a.username)}</b></p>`; return; }
+    const f = (id, label, type, ph, extra = '') => `<label>${esc(T(label))}</label><input type="${type}" data-f id="${id}" placeholder="${esc(ph || '')}" autocomplete="off" ${extra}>`;
+    const last = mode === 'name' ? '#au' : '#ap';
+    host.innerHTML = (mode === 'name' ? '' : `<div class="seg"><button class="btn ${mode === 'register' ? 'on' : ''}" data-f data-am="register">${esc(T('accRegister'))}</button><button class="btn ${mode === 'login' ? 'on' : ''}" data-f data-am="login">${esc(T('accLogin'))}</button></div>`)
+      + (mode !== 'login' ? f('au', 'accUser', 'text', 'name_123', `maxlength="20" data-submit="${mode === 'name' ? '#asub' : ''}"`) + `<div class="hint">${esc(T('accUserHint'))}</div>` : '')
+      + (mode !== 'name' ? f('ae', 'accEmail', 'email', 'name@mail.de') + f('ap', 'accPass', 'password', '', 'data-submit="#asub"') : '')
+      + `<div class="actions" style="justify-content:flex-start;margin-top:1.2rem"><button class="btn primary" data-f id="asub" ${busy ? 'disabled' : ''}>${esc(T(mode === 'login' ? 'accLogin' : mode === 'name' ? 'save' : 'accRegister'))}</button>${mode !== 'name' ? `<button class="btn" data-f id="agoogle" ${busy ? 'disabled' : ''}>G  ${esc(T('accGoogle'))}</button>` : ''}</div><div class="hint" id="amsg" style="min-height:1.4em">${esc(msg)}</div>`;
+    $$('[data-am]', host).forEach(b => b.onclick = () => { mode = b.dataset.am; msg = ''; paint(); refocus$(host, mode === 'register' ? '#au' : '#ae'); });
+    $('#asub', host).onclick = submit; if ($('#agoogle', host)) $('#agoogle', host).onclick = google;
+  };
+  const done = async r => {
+    busy = false;
+    if (r.error) { msg = errMsg(r); return paint(); }
+    if (r.confirm) { mode = 'login'; msg = T('accConfirm'); return paint(); }
+    cfg.account = r.state || (await api.acc.state()); renderProfile(); loadFriends();
+    if (cfg.account.needsUsername) { mode = 'name'; msg = ''; return paint(); }
+    paint(); o.onSuccess && o.onSuccess();
+  };
+  async function submit() {
+    if (busy) return; const v = id => ($(id, host)?.value || '').trim();
+    busy = true; msg = '…'; paint();
+    done(mode === 'register' ? await api.acc.signUp({ username: v('#au'), email: v('#ae'), password: $('#ap', host).value })
+      : mode === 'login' ? await api.acc.signIn({ email: v('#ae'), password: $('#ap', host).value }) : await api.acc.username(v('#au')));
+  }
+  async function google() { if (busy) return; busy = true; msg = T('accWait'); paint(); done(await api.acc.google()); }
+  paint(); refocus$(host, mode === 'name' ? '#au' : '#au');
+}
+const refocus$ = (host, sel) => requestAnimationFrame(() => ($(sel, host) || $('[data-f]', host))?.focus());
+function accountModal() {
+  const a = acc();
+  if (!a.signedIn || a.needsUsername) {
+    const m = modal('acct', `<h2>${esc(T(a.needsUsername ? 'accChoose' : 'accCreate'))}</h2><div id="acct"></div><div class="actions"><button class="btn" data-f id="ax">${esc(T('close'))}</button></div>`, 'wide');
+    mountAccount($('#acct', m), { onSuccess: closeModal }); $('#ax', m).onclick = closeModal; return;
+  }
+  const m = modal('acct', `<div class="prof"><i class="av big">${esc(a.username[0].toUpperCase())}</i><div><h2 style="margin:0">${esc(a.username)}</h2><div class="hint" style="margin:.2rem 0 0">${esc(a.user?.email || '')}</div></div></div>
+    <div class="stack" style="margin-top:1.4rem"><button class="btn" data-f id="ash"></button><button class="btn primary" data-f id="afr">${esc(T('friends'))}</button><button class="btn danger" data-f id="aout">${esc(T('accOut'))}</button><button class="btn" data-f id="ax">${esc(T('close'))}</button></div>`);
+  tog($('#ash', m), T('accShare'), () => cfg.shareActivity !== false, v => save({ shareActivity: v }));
+  $('#afr', m).onclick = () => friendsModal('friends');
+  let sure = false; $('#aout', m).onclick = async e => { if (!sure) { sure = true; e.target.textContent = T('sure'); return; } cfg.account = await api.acc.signOut(); FR = null; renderProfile(); badge(); closeModal(); };
+  $('#ax', m).onclick = closeModal;
+}
+$('#dev').onclick = accountModal;
+
+/* ---------- Freunde ---------- */
+let FR = null, frTab = 'friends', frT = 0, searchT = 0;
+const badge = () => { const n = FR?.incoming?.length || 0, b = $('#friendsBtn .bd'); b.hidden = !n; b.textContent = n; };
+async function loadFriends() {
+  const a = acc(); if (!a.signedIn || !a.username) { FR = null; badge(); return; }
+  const r = await api.acc.friends(); if (!r || r.error) return;
+  const changed = JSON.stringify(r) !== JSON.stringify(FR); FR = r; badge();
+  if (changed && modalId === 'friends' && frTab !== 'add') friendsModal(frTab, true);
+}
+const statusOf = f => f.online ? (f.activity ? `${T('fOnline')} <b>${esc(f.activity)}</b>` : esc(T('fIdle'))) : esc(T('fOffline'));
+const frRow = (name, sub, btns, on) => `<div class="fr"><i class="av ${on ? 'on' : ''}">${esc((name[0] || '?').toUpperCase())}</i><div><b>${esc(name)}</b><small>${sub}</small></div>${btns}</div>`;
+function friendsModal(tab = 'friends', quiet) {
+  frTab = tab; const a = acc();
+  if (!a.signedIn || !a.username) {
+    const m = modal('friends', `<h2>${esc(T('friends'))}</h2><p class="sub">${esc(T('fNeedLogin'))}</p><div class="actions"><button class="btn" data-f id="fx">${esc(T('close'))}</button><button class="btn primary" data-f id="fl">${esc(T('accGuest'))}</button></div>`);
+    $('#fx', m).onclick = closeModal; $('#fl', m).onclick = accountModal; return;
+  }
+  const f = FR || { friends: [], incoming: [], outgoing: [] }, keep = modalId === 'friends' ? $('.sh-body', modalEl)?.scrollTop || 0 : 0, af = quiet && document.activeElement?.dataset ? document.activeElement.dataset : null;
+  let body = '';
+  if (tab === 'friends') body = f.friends.length ? f.friends.map(x => frRow(x.username, statusOf(x), `<button class="btn danger sm" data-f data-fx="${x.fid}">×</button>`, x.online)).join('') : `<p class="hint">${esc(T('fNone'))}</p>`;
+  if (tab === 'requests') body = (f.incoming.length ? f.incoming.map(x => frRow(x.username, esc(T('fReqIn')), `<button class="btn primary sm" data-f data-fa="${x.fid}">${esc(T('fAccept'))}</button><button class="btn sm" data-f data-fx="${x.fid}">${esc(T('fDecline'))}</button>`)).join('') : '')
+    + (f.outgoing.length ? `<label>${esc(T('fPending'))}</label>` + f.outgoing.map(x => frRow(x.username, esc(T('fPending')), `<button class="btn sm" data-f data-fx="${x.fid}">${esc(T('cancel'))}</button>`)).join('') : '')
+    || `<p class="hint">${esc(T('fNoReq'))}</p>`;
+  if (tab === 'add') body = `<input type="text" data-f id="fs" placeholder="${esc(T('fSearchPh'))}" maxlength="20" autocomplete="off"><div id="fres" style="margin-top:1rem"></div>`;
+  const n = f.incoming.length;
+  const m = modal('friends', `<div class="sh-head"><h2>${esc(T('friends'))}</h2><div class="seg tabs">${[['friends', T('friends')], ['requests', T('fReq') + (n ? ` (${n})` : '')], ['add', T('fAdd')]].map(([k, l]) => `<button class="btn ${k === tab ? 'on' : ''}" data-f data-ft="${k}">${esc(l)}</button>`).join('')}</div></div><div class="sh-body">${body}</div><div class="sh-foot"><button class="btn primary" data-f id="fdone">${esc(T('done'))}</button></div>`, 'wide settings');
+  if (keep) $('.sh-body', m).scrollTop = keep;
+  $$('[data-ft]', m).forEach(b => b.onclick = () => { friendsModal(b.dataset.ft); refocus(`[data-ft="${b.dataset.ft}"]`); });
+  $('#fdone', m).onclick = closeModal;
+  $$('[data-fx]', m).forEach(b => b.onclick = async () => { await api.acc.remove(+b.dataset.fx); await loadFriends(); friendsModal(tab); });
+  $$('[data-fa]', m).forEach(b => b.onclick = async () => { await api.acc.accept(+b.dataset.fa); await loadFriends(); friendsModal(tab); });
+  if (af && af.ft) refocus(`[data-ft="${af.ft}"]`);
+  if (tab === 'add') {
+    const fs = $('#fs', m), res = $('#fres', m);
+    fs.oninput = () => { clearTimeout(searchT); searchT = setTimeout(async () => {
+      const q = fs.value.trim(); if (q.length < 2) { res.innerHTML = ''; return; }
+      const list = await api.acc.search(q), have = new Set([...(FR?.friends || []), ...(FR?.outgoing || []), ...(FR?.incoming || [])].map(x => x.username));
+      res.innerHTML = Array.isArray(list) && list.length ? list.map(x => frRow(x.username, '', have.has(x.username) ? `<span class="hint" style="margin:0">${esc(T('fPending'))}</span>` : `<button class="btn primary sm" data-f data-fadd="${esc(x.username)}">${esc(T('fAdd'))}</button>`)).join('') : `<p class="hint">${esc(T('fNoRes'))}</p>`;
+      $$('[data-fadd]', res).forEach(b => b.onclick = async () => { b.disabled = true; const r = await api.acc.add(b.dataset.fadd); b.textContent = r.error ? T('accErr') : T('fSent'); loadFriends(); });
+    }, 300); };
+    refocus('#fs');
+  }
+}
+$('#friendsBtn').onclick = () => friendsModal('friends');
+clearInterval(frT); frT = setInterval(() => loadFriends(), 10000);
+
+/* ---------- News-Ticker unten rechts ---------- */
+let NEWS = [], newsI = 0;
+async function loadNews() { try { NEWS = await api.news(); if (!Array.isArray(NEWS)) NEWS = []; } catch { NEWS = []; } newsI = 0; paintNews(); }
+function paintNews() {
+  const n = $('#news'); n.hidden = !NEWS.length; if (!NEWS.length) return;
+  n.innerHTML = NEWS.map((p, i) => `<div class="ns ${i === newsI ? 'on' : ''}"><span class="nt">${esc(p.tag || T('newsTag'))}</span><b>${esc(p.title)}</b><p>${esc(p.summary || '')}</p></div>`).join('')
+    + `<div class="nd">${NEWS.map((_, i) => `<i class="${i === newsI ? 'on' : ''}"></i>`).join('')}</div><i class="np"></i>`;
+  const np = $('.np', n); np.onanimationend = nextNews;
+}
+function nextNews() {
+  if (NEWS.length < 2) return;
+  if (modalEl || editing) { const np = $('#news .np'); if (np) { np.style.animation = 'none'; void np.offsetWidth; np.style.animation = ''; } return; }
+  newsI = (newsI + 1) % NEWS.length;
+  $$('#news .ns').forEach((e, i) => e.classList.toggle('on', i === newsI)); $$('#news .nd i').forEach((e, i) => e.classList.toggle('on', i === newsI));
+  const np = $('#news .np'); np.style.animation = 'none'; void np.offsetWidth; np.style.animation = '';
+}
+function fmtBody(t) {
+  let h = '', ul = false;
+  for (const l of String(t || '').split(/\r?\n/)) {
+    if (/^\s*[-•*]\s+/.test(l)) { if (!ul) { h += '<ul>'; ul = true; } h += `<li>${esc(l.replace(/^\s*[-•*]\s+/, ''))}</li>`; }
+    else { if (ul) { h += '</ul>'; ul = false; } if (l.trim()) h += `<p>${esc(l)}</p>`; }
+  }
+  return h + (ul ? '</ul>' : '');
+}
+function openPost(p) {
+  if (!p) return;
+  const d = p.created_at ? new Date(p.created_at).toLocaleDateString(cfg.lang, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const m = modal('post', `<div class="post"><span class="nt">${esc(p.tag || T('newsTag'))}</span> <span class="hint" style="margin:0 0 0 .6rem">${esc(d)}</span><h2 style="margin-top:.6rem">${esc(p.title)}</h2>${/^https:\/\//.test(p.image_url || '') ? `<img src="${esc(p.image_url)}" alt="">` : ''}<div class="pb">${fmtBody(p.body || p.summary)}</div></div><div class="actions"><button class="btn primary" data-f id="px">${esc(T('close'))}</button></div>`, 'wide');
+  $('#px', m).onclick = closeModal;
+}
+$('#news').onclick = () => openPost(NEWS[newsI]);
+
+/* ---------- Großer Mauszeiger im Fernbedienungsmodus ---------- */
+const arrowSvg = sz => `<svg viewBox="0 0 24 24" width="${(22 * sz).toFixed(0)}" height="${(22 * sz).toFixed(0)}"><path d="M4 2.5v17l4.6-4.2 3.1 6.7 3-1.4-3.1-6.6 6.4-.3z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+let bcSize = 2;
+function setBigCursor(on, size) {
+  const bc = $('#bigcur'); bcSize = size || 2; document.body.classList.toggle('bigcursor', !!on); bc.hidden = !on;
+  if (on) bc.innerHTML = arrowSvg(bcSize);
+}
+addEventListener('mousemove', e => { const bc = $('#bigcur'); if (!bc.hidden) bc.style.transform = `translate3d(${e.clientX - 3.7 * bcSize}px,${e.clientY - 2.3 * bcSize}px,0)`; }, { passive: true });
+
+/* ---------- Updates ---------- */
+let UPDS = { state: 'idle' };
+function updText(u) {
+  return { checking: T('updChecking'), latest: T('updLatest'), downloading: `${T('updDown')} ${u.percent || 0} %`, ready: `${T('updReady')} (v${u.next})`, manual: `${T('updNew')} (v${u.next})`, error: T('updErr') }[u.state] || '';
+}
+function paintUpd() {
+  const b = $('#upd'), ok = UPDS.state === 'ready' || UPDS.state === 'manual';
+  b.hidden = !ok; if (ok) b.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg><span>${esc(UPDS.state === 'ready' ? T('updRestart') : T('updGet'))}</span>`;
+  const l = $('#updline'); if (l) l.textContent = updText(UPDS);
+}
+$('#upd').onclick = () => api.update.install();
+api.on('update', u => { UPDS = u; paintUpd(); });
 
 /* ---------- Start ---------- */
 api.on('apps', d => {
@@ -715,11 +913,15 @@ api.on('apps', d => {
 api.on('running', ids => { cfg.running = ids; render(); });
 api.on('launching', a => launching(a));
 api.on('home', () => { launchReset(); render(); setTimeout(() => { if (!modalEl) ($('.tile.add') && $$('.tile')[0])?.focus(); }, 60); });
+api.on('account', st => { cfg.account = st; renderProfile(); loadFriends(); });
+api.on('remoteMode', d => setBigCursor(d.on, d.size));
 api.on('remote', d => { cfg.paired = d.paired; pill(); refreshRemote(); });
 $('#gear').onclick = () => settings(); $('#pill').onclick = () => settings('remote'); $('#wheel').onclick = () => api.menu();
 (async () => {
   cfg = await api.config();
   applyTheme(); applyLang(); wallStart(); setInterval(tick, 1000); setInterval(weather, 9e5);
+  loadNews(); setInterval(loadNews, 9e5); loadFriends();
+  UPDS = cfg.update || UPDS; paintUpd();
   $('.tile')?.focus();
   if (!cfg.onboarded) welcome(0);
 })();

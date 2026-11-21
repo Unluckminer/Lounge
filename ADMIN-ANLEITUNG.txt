@@ -1,0 +1,121 @@
+LOUNGE 1.4 – KONTEN, FREUNDE UND NEWS EINRICHTEN (einmalig, ca. 10 Minuten, dauerhaft kostenlos)
+================================================================================================
+
+WARUM SUPABASE (FREE-TIER)?
+- Dauerhaft kostenlos, keine Kreditkarte: 50.000 aktive Nutzer/Monat, 500 MB Datenbank, E-Mail- und Google-Login inklusive.
+- Hat ein Dashboard mit Tabellen-Editor – dort veröffentlichst du später News per Klick.
+- Einzige Eigenheit: Projekte ohne Aktivität werden nach 7 Tagen pausiert (ein Klick im Dashboard weckt sie wieder).
+  Dagegen liegt .github/workflows/supabase-keepalive.yml bei (ruft täglich einmal die News ab, s. Schritt 6).
+- Alternative wäre Firebase Spark (ebenfalls dauerhaft kostenlos). Umgesetzt ist Supabase, weil Login, Freunde und News
+  dort ohne eigenen Server mit einfachen Regeln (SQL) abgesichert sind.
+
+SCHRITT 1 – Projekt anlegen
+  supabase.com > Sign in > New project (Region z. B. Frankfurt) > Datenbank-Passwort merken.
+
+SCHRITT 2 – Tabellen und Regeln anlegen
+  Dashboard > SQL Editor > New query > Inhalt von supabase/setup.sql einfügen > Run.
+  (Das legt Profile, Freunde, Live-Status und News an und sichert alles ab. Enthält zwei Beispiel-News.)
+
+SCHRITT 3 – Zugangsdaten in die App eintragen
+  Dashboard > Project Settings > API:  "Project URL" und "anon public"-Schlüssel kopieren.
+  In backend.json eintragen:
+     { "supabaseUrl": "https://DEINPROJEKT.supabase.co", "supabaseAnonKey": "eyJ...", "newsUrl": "" }
+  Der anon-Schlüssel ist öffentlich gedacht; geschützt sind die Daten durch die Regeln aus Schritt 2.
+  NIEMALS den "service_role"-Schlüssel in die App oder auf GitHub legen.
+  Danach wie gewohnt auf GitHub hochladen und bauen.
+
+SCHRITT 4 – E-Mail-Bestätigung (Entscheidung)
+  Dashboard > Authentication > Providers > Email.
+  - "Confirm email" AN (Standard): Neue Nutzer müssen erst den Link in der Mail anklicken. Sicherer.
+  - "Confirm email" AUS: Registrierung loggt sofort ein. Bequemer zum Testen.
+  Hinweis: Das kostenlose Standard-Mailsystem von Supabase verschickt nur wenige Mails pro Stunde.
+  Für viele Nutzer später unter Authentication > SMTP einen eigenen Anbieter eintragen (z. B. Brevo/Resend, kostenlose Stufen).
+
+SCHRITT 5 – Google-Login (optional)
+  a) console.cloud.google.com > Neues Projekt > "APIs & Dienste" > "OAuth-Zustimmungsbildschirm" (extern) ausfüllen
+     > "Anmeldedaten" > "OAuth-Client-ID erstellen" > Typ "Webanwendung".
+     Autorisierte Weiterleitungs-URI:  https://DEINPROJEKT.supabase.co/auth/v1/callback
+     Client-ID und Client-Secret kopieren.
+  b) Supabase > Authentication > Providers > Google: aktivieren, Client-ID und Secret eintragen, speichern.
+  c) Supabase > Authentication > URL Configuration > Redirect URLs: hinzufügen
+        http://127.0.0.1:4799/callback
+     (Lounge öffnet Google im normalen Browser und nimmt die Antwort auf diesem lokalen Port entgegen.)
+  Ohne diese Schritte funktioniert E-Mail/Passwort trotzdem; nur der Google-Knopf meldet einen Fehler.
+
+SCHRITT 6 – Pausieren verhindern (empfohlen)
+  GitHub > dein Repository > Settings > Secrets and variables > Actions > New repository secret:
+     SUPABASE_URL      = https://DEINPROJEKT.supabase.co
+     SUPABASE_ANON_KEY = dein anon-Schlüssel
+  Der Workflow "Supabase wach halten" läuft dann täglich von selbst.
+
+
+NEWS ALS ADMIN VERÖFFENTLICHEN (der einfachste Weg)
+---------------------------------------------------
+  Supabase-Dashboard > Table Editor > Tabelle "news" > "Insert" > "Insert row":
+     title     = Überschrift (z. B. "Neues Update 1.5 – What's New")
+     tag       = kleines Etikett, z. B. Update, Tipp, News
+     summary   = Kurztext, der im Ticker unten rechts steht (1–2 Zeilen)
+     body      = der ganze Beitrag, der beim Anklicken aufgeht.
+                 Leerzeilen = neuer Absatz; Zeilen mit "- " am Anfang werden zu einer Aufzählung.
+     image_url = optional, https-Link zu einem Bild
+     published = an (Haken). Zum Verstecken oder Zurückziehen einfach ausschalten oder die Zeile löschen.
+  Speichern – fertig. Die App holt die neuesten 10 Beiträge alle 15 Minuten und beim Start; der Ticker wechselt automatisch.
+  Nur du kannst im Dashboard schreiben; die App darf News nur lesen.
+
+  Ohne Datenbank: In backend.json bei "newsUrl" die Adresse einer JSON-Datei eintragen (z. B. die "Raw"-Adresse einer
+  Datei in deinem GitHub-Repository, Aufbau wie renderer/news.json). Ohne beides zeigt die App die mitgelieferten Beiträge.
+
+WICHTIG FÜR DATENSCHUTZ
+  - Nutzernamen sind für angemeldete Nutzer suchbar, E-Mail-Adressen nie.
+  - Den Live-Status ("nutzt gerade: …") sehen nur bestätigte Freunde. Jeder kann ihn in den Einstellungen
+    (Allgemein > Aktivität mit Freunden teilen) abschalten. Beim Beenden von Lounge wird er gelöscht.
+  - Passwörter speichert nur Supabase (verschlüsselt), nie die App. Die Anmeldung auf dem Gerät wird mit dem
+    Betriebssystem-Schlüsselbund verschlüsselt abgelegt.
+
+
+=====================================================================================================
+AUTOMATISCHE UPDATES FÜR ALLE (ab Version 1.4.1)
+=====================================================================================================
+So funktioniert es: Du veröffentlichst auf GitHub ein Release. Jede installierte Lounge fragt beim Start (und alle 4 Stunden)
+bei GitHub nach, lädt neue Versionen im Hintergrund und installiert sie beim nächsten Beenden – oder sofort über den Knopf
+"Neu starten & updaten" (oben rechts und unter Einstellungen > Allgemein > Updates). Kein Server nötig, kostenlos.
+
+EINMALIG EINRICHTEN
+ 1. Alle Dateien aus dem ZIP ins GitHub-Repository hochladen (wie bisher).
+ 2. GitHub > Repository > Settings > Actions > General > Workflow permissions > "Read and write permissions" > Save.
+    (Damit darf der Workflow Releases anlegen.)
+ 3. Die Datei backend.json mit deinen Supabase-Daten ausfüllen (siehe oben), falls noch nicht geschehen.
+
+JEDES MAL, WENN DU EIN UPDATE VERÖFFENTLICHEN WILLST
+ 1. Geänderte Dateien ins Repository hochladen (commit).
+ 2. GitHub > Repository > rechts "Releases" > "Create a new release" > bei "Choose a tag" eine NEUE, höhere Nummer
+    eintippen, z. B. v1.5.0 > "Create new tag" > Titel und Beschreibung schreiben > "Publish release".
+    (Die Versionsnummer in package.json musst du NICHT ändern, der Workflow übernimmt sie aus dem Tag.)
+ 3. Unter "Actions" läuft jetzt "Lounge bauen und veröffentlichen" (ca. 10 Minuten). Danach hängen am Release:
+    Lounge-Windows-Setup.exe, Lounge-Windows-Portable.exe, Lounge-macOS.dmg, Lounge-Linux.AppImage und die latest*.yml-Dateien.
+ 4. Fertig. Alle Installationen holen sich die neue Version selbst.
+    Wichtig: Jede neue Version braucht eine höhere Nummer als die vorige (v1.5.0 nach v1.4.1).
+
+WER BEKOMMT WAS
+ - Windows (Lounge-Windows-Setup.exe, einmal installieren): vollautomatisches Update im Hintergrund.
+ - Linux (AppImage): vollautomatisch.
+ - Windows "Portable" und macOS: Sie bekommen oben rechts einen Knopf "Update holen", der die Release-Seite öffnet
+   (macOS kann nur mit einem bezahlten Apple-Entwicklerzugang für ca. 99 $/Jahr still updaten).
+ - Empfehlung: Gib deinen Nutzern künftig die Setup.exe statt der Portable. Wer bisher die Portable hat, muss einmal
+   umsteigen; danach läuft alles von selbst.
+ - Windows zeigt bei der ersten Installation eine SmartScreen-Warnung ("Unbekannter Herausgeber"), weil die App nicht
+   signiert ist: "Weitere Informationen" > "Trotzdem ausführen". Updates danach laufen ohne Warnung durch.
+ - Test: Installiere v1.4.1, veröffentliche v1.4.2 und starte die App; nach etwa 15 Sekunden erscheint der Hinweis.
+
+
+=====================================================================================================
+WIE VIELE AKTIVE NUTZER HABE ICH?
+=====================================================================================================
+ 1. Einmal supabase/setup.sql erneut im SQL Editor ausführen (ist so gebaut, dass nichts doppelt angelegt wird;
+    es kommt die Statistik-Ansicht "stats" hinzu).
+ 2. Dashboard > SQL Editor > neue Abfrage:    select * from stats;
+    Du siehst: registriert, jetzt_online, aktiv_heute, aktiv_7_tage, aktiv_30_tage.
+    (Zählt Nutzer mit Konto. Wer ohne Konto nutzt, taucht nicht auf. Ein "aktiver" Nutzer = mindestens einmal am Tag Lounge geöffnet.)
+ 3. Alle Konten ansehen: Dashboard > Authentication > Users (E-Mail, Anmeldedatum, letzte Anmeldung).
+ 4. Downloads: GitHub > Releases zeigt pro Datei, wie oft sie heruntergeladen wurde.
+Die Zahlen sind für die App-Schlüssel gesperrt; nur du siehst sie im Dashboard.

@@ -9,7 +9,9 @@ contextBridge.exposeInMainWorld('api', {
   programs: () => inv('programs:list'), sys: () => inv('sys:info'),
   pickExe: () => inv('dlg:exe'), pickImage: () => inv('dlg:img'), wallPick: () => inv('wall:pick'), wallClear: () => inv('wall:clear'),
   power: k => inv('power', k), remoteInfo: () => inv('remote:info'), unpair: () => inv('remote:unpair'), quit: () => inv('app:quit'),
-  menu: () => inv('menu:toggle'), toast: (t, s, ms) => inv('toast', { t, s, ms }),
+  menu: () => inv('menu:toggle'), update: { state: () => inv('update:state'), check: () => inv('update:check'), install: () => inv('update:install') }, news: () => inv('news:list'),
+  acc: { state: () => inv('acc:state'), signUp: d => inv('acc:signUp', d), signIn: d => inv('acc:signIn', d), google: () => inv('acc:google'), username: n => inv('acc:username', n), signOut: () => inv('acc:signOut'),
+    friends: () => inv('acc:friends'), search: q => inv('acc:search', q), add: n => inv('acc:add', n), accept: id => inv('acc:accept', id), remove: id => inv('acc:remove', id) }, toast: (t, s, ms) => inv('toast', { t, s, ms }),
   on,
 });
 /* Overlay-Fenster (Strg+L-Menü und Hinweise) */

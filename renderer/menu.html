@@ -88,8 +88,9 @@ function activate() {
 }
 function pickSub() { const c = subList()[subSel]; if (!c) return; if (open === 'tasks') ovl.act('task', c.id); else ovl.act('split', c.id); }
 ovl.on('data', x => { d = x; build(); });
-addEventListener('keydown', e => {
-  const k = e.key;
+function onKey(k, e) {
+  if (!d) return;
+  e = e || { preventDefault() {} };
   if (k === 'Escape') { e.preventDefault(); if (open) { open = null; paint(); } else ovl.act('close'); return; }
   if (open) {
     const n = subList().length;
@@ -104,7 +105,9 @@ addEventListener('keydown', e => {
   else if (k === 'ArrowRight' || k === 'Tab') { e.preventDefault(); sel = (sel + 1) % items.length; armed = false; paint(); }
   else if (k === 'ArrowUp') { e.preventDefault(); if (items[sel].sub) { open = items[sel].sub; subSel = 0; paint(); } }
   else if (k === 'Enter' || k === ' ') { e.preventDefault(); activate(); }
-});
+}
+addEventListener('keydown', e => onKey(e.key, e));
+ovl.on('key', k => onKey(k));
 /* Klick neben das Menü schließt es */
 document.body.addEventListener('mousedown', e => { if (!e.target.closest('#dock,#sub')) ovl.act('close'); });
 </script></body></html>

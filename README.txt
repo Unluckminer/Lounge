@@ -12,7 +12,7 @@ Variante A - alle drei Systeme automatisch (empfohlen):
   1. Diesen Ordner in ein neues GitHub-Repository hochladen.
   2. Tab "Actions" > "Lounge bauen" > "Run workflow".
   3. Nach ein paar Minuten die drei Dateien unter "Artifacts" herunterladen.
-     (Mit einem Tag wie v1.3.0 legt der Workflow stattdessen ein Release an.)
+     (Mit einem Tag wie v1.4.1 legt der Workflow stattdessen ein Release an.)
 
 Variante B - nur Windows, auf dem eigenen PC:
   EXE-bauen-Windows.bat doppelklicken. Ergebnis: dist\Lounge-Windows.exe
@@ -47,3 +47,17 @@ NEU IN VERSION 1.3
 - Programm hinzufügen: Dropdown mit gerade geöffneten Programmen und zufälligen Vorschlägen aus den installierten.
 Hinweis: Strg + L ist nur aktiv, solange Lounge im Vordergrund ist oder eine Lounge-App läuft, damit es in normalen Programmen frei bleibt.
 Fenster-Steuerung (Splitscreen, Vollbild aus) nutzt unter Windows PowerShell, unter Linux xdotool, unter macOS Bedienungshilfen.
+
+NEU IN VERSION 1.4
+------------------
+- Strg + L repariert: Menü öffnet sich robust, Pfeiltasten/Enter/Esc funktionieren auch, wenn die andere App im Fokus bleibt.
+- Konto (E-Mail oder Google), Freunde mit Live-Status, News-Ticker unten rechts -> Einrichtung siehe ADMIN-ANLEITUNG.txt (backend.json + supabase/setup.sql).
+- Einstellungen > Fernbedienung: Mauszeiger vergrößern (Haken + Regler).
+- Gruß, Uhr und Datum sind eigene Widgets, alle Widgets lassen sich an allen Ecken und Kanten skalieren.
+- Größerer Widget-Bereich, Schnellstart und Apps weiter unten, flüssigeres Scrollen.
+
+NEU IN VERSION 1.4.1
+--------------------
+- Automatische Updates über GitHub-Releases (Anleitung: ADMIN-ANLEITUNG.txt, Abschnitt "Automatische Updates").
+- Windows-Build jetzt als Installer (Lounge-Windows-Setup.exe, aktualisiert sich selbst) und weiterhin als Portable.
+- Statistik der aktiven Nutzer im Supabase-Dashboard (select * from stats;).
