@@ -19,10 +19,13 @@ jobs:
         include:
           - os: windows-latest
             script: dist:win
+            artifact_name: dist-win
           - os: macos-latest
             script: dist:mac
+            artifact_name: dist-mac
           - os: ubuntu-latest
             script: dist:linux
+            artifact_name: dist-linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +43,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.script }}
+          name: ${{ matrix.artifact_name }}
           path: |
             dist/Lounge-*
             dist/latest*.yml
