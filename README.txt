@@ -30,7 +30,7 @@ Hinweise
 --------
 Windows: SmartScreen zeigt ggf. "Der Computer wurde geschuetzt" > "Weitere Informationen" > "Trotzdem ausfuehren" (die Datei ist nicht signiert).
          Beim allerersten Start entpackt sich die Datei kurz, es kann einige Sekunden dauern, bis das Fenster erscheint.
-macOS  : Beim ersten Start Rechtsklick > Oeffnen. Bei "ist beschaedigt": im Terminal  xattr -cr /Applications/"TV Launcher.app"
+macOS  : Beim ersten Start Rechtsklick > Oeffnen. Bei "ist beschaedigt": im Terminal  xattr -cr /Applications/"Lounge.app"
          Fuer das Handy-Touchpad: Bedienungshilfen erlauben, optional  brew install cliclick
 Linux  : benoetigt xdotool (X11): sudo apt install xdotool
 Fehlerprotokoll: error.log im Datenordner der App.

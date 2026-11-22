@@ -426,12 +426,12 @@ function render() {
 }
 /* Die Reihe wird per GPU-Transform verschoben (statt scrollIntoView): kein Ruckeln, immer dieselbe weiche Kurve */
 function centerTile(t, instant) {
-  const wrap = $('#rowwrap'), row = $('#row'); if (!t || !wrap) return;
-  const cw = wrap.clientWidth, rw = row.scrollWidth, mid = t.offsetLeft + t.offsetWidth / 2;
-  const tx = rw <= cw ? (cw - rw) / 2 : -Math.min(Math.max(mid - cw / 2, 0), rw - cw);
-  if (instant) { row.style.transition = 'none'; row.style.transform = `translate3d(${tx}px,0,0)`; void row.offsetWidth; row.style.transition = ''; }
-  else row.style.transform = `translate3d(${tx}px,0,0)`;
+  const wrap = $('#rowwrap'), row = $('#row'), first = row.firstElementChild; if (!t || !wrap || !first) return;
+  const ty = -(t.offsetTop - first.offsetTop);   // die Reihe des Fokus rutscht an dieselbe Stelle wie die erste Reihe
+  if (instant) { row.style.transition = 'none'; row.style.transform = `translate3d(0,${ty}px,0)`; void row.offsetWidth; row.style.transition = ''; }
+  else { navLock = performance.now() + 800; row.style.transform = `translate3d(0,${ty}px,0)`; }
 }
+let navLock = 0;
 addEventListener('resize', () => centerTile(document.activeElement?.closest?.('.tile') || $('.tile'), true));
 function pill() { $('#pill').hidden = cfg.paired > 0; }
 function blip(f = 520) {
@@ -723,9 +723,39 @@ document.addEventListener('focusin', e => {
   const a = cfg.apps.find(x => x.id === t.dataset.id);
   a ? setBg(colorOf(a)) : setBg(...idleBg());
   if (!mouseFocus) centerTile(t);
+  newsLayer();
 });
 let mouseFocus = false;
-$('#row').addEventListener('mouseover', e => { const t = e.target.closest('.tile'); if (t && document.activeElement !== t && !modalEl && !editing) { mouseFocus = true; t.focus({ preventScroll: true }); mouseFocus = false; } });
+$('#row').addEventListener('mouseover', e => {
+  const t = e.target.closest('.tile'); if (!t) return;
+  hoverTile = t; newsLayer();
+  if (document.activeElement !== t && !modalEl && !editing && performance.now() > navLock) { mouseFocus = true; t.focus({ preventScroll: true }); mouseFocus = false; }
+});
+$('#row').addEventListener('mouseout', e => { if (e.target.closest('.tile') && !e.relatedTarget?.closest?.('.tile')) { hoverTile = null; newsLayer(); } });
+
+/* Mausrad: wie beim Apple TV nach unten/oben durch die Kachelreihen */
+let wheelT = 0;
+addEventListener('wheel', e => {
+  if (modalEl || editing || Math.abs(e.deltaY) < 2 || e.target.closest?.('.modal, .wd, textarea')) return;
+  e.preventDefault();
+  const now = performance.now(); if (now - wheelT < 380) return; wheelT = now;
+  if (!document.activeElement?.closest?.('.tile')) { $('.tile')?.focus(); return; }
+  move(e.deltaY > 0 ? 'Down' : 'Up');
+}, { passive: false });
+
+/* News unten rechts liegen vor den Kacheln – sobald eine Kachel (Maus oder Fokus) sie berührt, kommt die Kachel nach vorn */
+let hoverTile = null, usingMouse = false;
+addEventListener('mousemove', () => { usingMouse = true; }, { passive: true });
+addEventListener('keydown', () => { usingMouse = false; });
+function newsLayer() {
+  const n = $('#news'); if (!n || n.hidden) return;
+  const t = modalEl ? null : usingMouse ? hoverTile : document.activeElement?.closest?.('.tile');
+  let back = false;
+  if (t) { const a = $('.card', t).getBoundingClientRect(), b = n.getBoundingClientRect(); back = a.right > b.left - 8 && a.left < b.right + 8 && a.bottom > b.top - 8 && a.top < b.bottom + 8; }
+  n.classList.toggle('back', back);
+}
+$('#row').addEventListener('transitionend', e => { if (e.target.id === 'row') newsLayer(); });
+document.addEventListener('focusout', () => setTimeout(newsLayer, 0));
 
 /* ---------- Maus: Glanz, Neigung und Tiefe der Kacheln folgen dem Zeiger ---------- */
 let mx = -1e4, my = -1e4, raf = 0, idleT;

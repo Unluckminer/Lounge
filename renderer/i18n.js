@@ -42,7 +42,7 @@ de: { wheel: 'Menü', quick: 'Schnellstart', quickAdd: 'Zum Schnellstart hinzuf�
   newsTag: 'News', curBig: 'Im Fernbedienungsmodus: Mauszeiger vergrößern', curBigShort: 'Mauszeiger vergrößern', curSize: 'Größe des Mauszeigers', curNote: 'In Lounge, unter Windows auch in anderen Programmen. Aktiv, solange du das Handy als Touchpad nutzt.', wGreet: 'Willkommensspruch', wTime: 'Uhr', wDate: 'Datum', updates: 'Updates', updCheck: 'Nach Updates suchen', updChecking: 'Suche…', updLatest: 'Du bist auf dem neuesten Stand', updDown: 'Update wird geladen', updReady: 'Update bereit', updNew: 'Neue Version verfügbar', updErr: 'Update-Suche fehlgeschlagen', updRestart: 'Neu starten & updaten', updGet: 'Update holen' }
 };
 const N = { en: 'English', de: 'Deutsch', es: 'Español', fr: 'Français', it: 'Italiano', pt: 'Português', nl: 'Nederlands', pl: 'Polski', tr: 'Türkçe', ru: 'Русский', ja: '日本語', zh: '中文', ko: '한국어', ar: 'العربية' };
-const APP = 'TV Launcher'; // Programmname: nur hier ändern
+const APP = 'Lounge'; // Programmname: nur hier ändern
 const D = {};
 for (const l in L) { const a = L[l].replace(/Lounge/g, APP).split('|'); D[l] = {}; K.forEach((k, i) => { D[l][k] = a[i]; }); }
 for (const l in Y) for (const k in Y[l]) D[l][k] = Y[l][k];

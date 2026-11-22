@@ -1,6 +1,6 @@
 {
   "name": "tv-launcher",
-  "productName": "TV Launcher",
+  "productName": "Lounge",
   "version": "1.4.1",
   "description": "Apple-TV-Style Launcher mit Smartphone-Fernbedienung",
   "main": "main.js",
@@ -21,8 +21,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "local.tvlauncher",
-    "productName": "TV Launcher",
+    "appId": "local.lounge",
+    "productName": "Lounge",
     "files": [
       "main.js",
       "preload.js",
@@ -48,13 +48,14 @@
           ]
         }
       ],
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "extraResources": [
         {
           "from": "scripts",
           "to": "scripts"
         }
-      ]
+      ],
+      "icon": "build/icon.png"
     },
     "mac": {
       "target": [
@@ -97,7 +98,9 @@
       "allowToChangeInstallationDirectory": false,
       "deleteAppDataOnUninstall": false,
       "artifactName": "Lounge-Windows-Setup.${ext}",
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "shortcutName": "Lounge",
+      "uninstallDisplayName": "Lounge"
     },
     "portable": {
       "artifactName": "Lounge-Windows-Portable.${ext}"

@@ -9,6 +9,9 @@ const I18N = require('./renderer/i18n.js');
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
+/* Der Programmname hat sich von "TV Launcher" zu "Lounge" geändert: vorhandene Daten (Apps, Konto, Hintergründe) weiter nutzen */
+try { const old = path.join(app.getPath('appData'), 'TV Launcher'); if (fs.existsSync(old)) app.setPath('userData', old); } catch {}
+
 const P = process.platform, WIN = P === 'win32', MAC = P === 'darwin';
 /* AppImage unter neueren Linux-Systemen (z. B. Ubuntu 24.04) startet sonst wegen der Sandbox-Regeln nicht */
 if (P === 'linux') app.commandLine.appendSwitch('no-sandbox');
