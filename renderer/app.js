@@ -735,12 +735,23 @@ $('#row').addEventListener('mouseout', e => { if (e.target.closest('.tile') && !
 
 /* Mausrad: wie beim Apple TV nach unten/oben durch die Kachelreihen */
 let wheelT = 0;
+/* eine Reihe nach unten/oben: gleiche Spalte (oder die nächstliegende) in der Zielreihe */
+function rowStep(dir) {
+  const tiles = $$('#row .tile'); if (!tiles.length) return;
+  const cur = document.activeElement?.closest?.('.tile');
+  if (!cur) { tiles[0].focus(); return; }
+  const tops = [...new Set(tiles.map(t => t.offsetTop))].sort((x, y) => x - y);
+  const ri = Math.max(0, Math.min(tops.length - 1, tops.indexOf(cur.offsetTop) + dir));
+  if (tops[ri] === cur.offsetTop) return;
+  const rowTiles = tiles.filter(t => t.offsetTop === tops[ri]);
+  rowTiles.sort((p, q) => Math.abs(p.offsetLeft - cur.offsetLeft) - Math.abs(q.offsetLeft - cur.offsetLeft));
+  rowTiles[0].focus({ preventScroll: true });
+}
 addEventListener('wheel', e => {
-  if (modalEl || editing || Math.abs(e.deltaY) < 2 || e.target.closest?.('.modal, .wd, textarea')) return;
+  if (modalEl || editing || Math.abs(e.deltaY) < 2 || e.target.closest?.('.modal, textarea, .wd .todo, .wd .note')) return;
   e.preventDefault();
-  const now = performance.now(); if (now - wheelT < 380) return; wheelT = now;
-  if (!document.activeElement?.closest?.('.tile')) { $('.tile')?.focus(); return; }
-  move(e.deltaY > 0 ? 'Down' : 'Up');
+  const now = performance.now(); if (now - wheelT < 300) return; wheelT = now;
+  rowStep(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
 /* News unten rechts liegen vor den Kacheln – sobald eine Kachel (Maus oder Fokus) sie berührt, kommt die Kachel nach vorn */
